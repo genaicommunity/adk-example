@@ -106,10 +106,10 @@ insight_synthesis_agent = LlmAgent(
     model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.0-flash-exp"),
     name="insight_synthesis",
     instruction=INSIGHT_SYNTHESIS_PROMPT,
-    output_key="final_insights",  # Stores final formatted insights in state['final_insights']
+    # NO output_key - return text directly to user instead of writing to state
     # No tools needed - just formatting
     generate_content_config=types.GenerateContentConfig(
-        temperature=0.3,  # Higher temperature for better text generation while maintaining accuracy
+        temperature=0.7,  # Balanced temperature for natural text generation without echoing
     ),
 )
 
