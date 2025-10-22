@@ -2,6 +2,13 @@
 
 Enterprise-grade multi-agent AI system for cloud financial operations using Google ADK with **multi-table dynamic discovery**.
 
+📖 **Quick Links**:
+- [MIGRATION.md](./MIGRATION.md) - ⭐ Step-by-step setup guide (start here tomorrow!)
+- [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) - Enterprise deployment checklist
+- [CLAUDE.md](./CLAUDE.md) - Developer guide
+- [PRD_FinOps_Agent.md](./PRD_FinOps_Agent.md) - Product requirements
+- [TECHNICAL_ARCHITECTURE.md](./TECHNICAL_ARCHITECTURE.md) - Complete technical documentation
+
 ## Architecture Overview
 
 ```
