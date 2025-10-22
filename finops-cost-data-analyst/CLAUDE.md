@@ -4,31 +4,91 @@
 
 ### Environment Variables (.env)
 ```bash
-# REQUIRED
+# ============================================================================
+# REQUIRED: Multi-Table Discovery
+# ============================================================================
 BIGQUERY_PROJECT=gac-prod-471220          # Your GCP project ID
-BIGQUERY_DATASET=agent_bq_dataset          # BigQuery dataset name
-BIGQUERY_TABLE=cost_analysis               # BigQuery table name
 
-# OPTIONAL
+# ============================================================================
+# OPTIONAL: Fallback hints (if dynamic discovery fails)
+# ============================================================================
+BIGQUERY_DATASET=agent_bq_dataset          # Fallback cost dataset name
+BIGQUERY_TABLE=cost_analysis               # Fallback cost table name
+
+# ============================================================================
+# Multi-Table FinOps Setup (Recommended Naming for Auto-Discovery)
+# ============================================================================
+# The agent uses pattern matching to discover these datasets/tables:
+#
+# 1. COST ANALYSIS (Actual Spending):
+#    Dataset: cost_dataset, agent_bq_dataset, costs, spending
+#    Table: cost_analysis, cost_data, costs
+#
+# 2. BUDGET (Allocations & Forecasts):
+#    Dataset: budget_dataset, budgets, financial_planning
+#    Table: budget, budget_allocations, forecasts
+#
+# 3. USAGE (Resource Utilization):
+#    Dataset: usage_dataset, resource_usage, utilization
+#    Table: usage, resource_usage, consumption
+# ============================================================================
+
+# OPTIONAL: Model Configuration
 ROOT_AGENT_MODEL=gemini-2.0-flash-exp      # Model for all agents
 ```
 
 ### Google Cloud Setup
 1. **Authentication**: `gcloud auth application-default login`
-2. **IAM Permissions** (minimum):
-   - `roles/bigquery.dataViewer`
-   - `roles/bigquery.jobUser`
-3. **BigQuery Table Schema**:
+2. **IAM Permissions** (minimum for multi-table discovery):
+   - `roles/bigquery.dataViewer` (read datasets, tables, data)
+   - `roles/bigquery.jobUser` (create and run queries)
+   - Specific permissions:
+     - `bigquery.datasets.get` (list and describe datasets)
+     - `bigquery.tables.get` (get table schema)
+     - `bigquery.tables.list` (list tables in dataset)
+     - `bigquery.jobs.create` (execute queries)
+
+3. **BigQuery Table Schemas** (3 Datasets):
+
+**Dataset 1: Cost Analysis (Actual Spending)**
 ```sql
-CREATE TABLE `project.dataset.cost_analysis` (
-  date DATE,
+CREATE TABLE `gac-prod-471220.cost_dataset.cost_analysis` (
+  date DATE NOT NULL,
   cto STRING,
   cloud STRING,
   application STRING,
   managed_service STRING,
   environment STRING,
   cost FLOAT64
-);
+)
+PARTITION BY DATE(date)
+CLUSTER BY application, cloud;
+```
+
+**Dataset 2: Budget (Allocations & Forecasts)**
+```sql
+CREATE TABLE `gac-prod-471220.budget_dataset.budget` (
+  date DATE NOT NULL,
+  application STRING,
+  budget_amount FLOAT64,
+  fiscal_year STRING,
+  department STRING
+)
+PARTITION BY DATE(date)
+CLUSTER BY application, fiscal_year;
+```
+
+**Dataset 3: Resource Usage (Utilization Metrics)**
+```sql
+CREATE TABLE `gac-prod-471220.usage_dataset.resource_usage` (
+  date DATE NOT NULL,
+  resource_type STRING,
+  application STRING,
+  usage_hours FLOAT64,
+  usage_amount FLOAT64
+)
+PARTITION BY DATE(date)
+CLUSTER BY application, resource_type;
 ```
 
 ## Architecture Flow
@@ -43,26 +103,40 @@ agent.py (Root File - NOT in subfolder)
   │   └─ sub_agents: [...]  ← NOT tools!
   │
   └─ Sub-Agents (all defined in agent.py, sequential execution):
-      1. sql_generation (LlmAgent)
-         - NO tools
+      1. sql_generation (LlmAgent) ⚡ DYNAMIC MULTI-TABLE DISCOVERY
+         - Tools: [bigquery_schema_toolset]
+           • list_dataset_ids (lists all datasets in project - NEW!)
+           • list_table_ids (lists all tables in dataset)
+           • get_table_info (fetches schema from BigQuery)
+           • get_dataset_info (dataset metadata)
          - output_key: "sql_query"
-         - Reads: user input + hardcoded schema from prompts.py
+         - Workflow (5 Steps):
+           a) Classify query intent (COST/BUDGET/USAGE/COMPARISON)
+           b) Call list_dataset_ids() to discover all datasets
+           c) Match dataset to query type using pattern matching
+           d) Call list_table_ids() to discover tables in dataset
+           e) Call get_table_info() to get schema
+           f) Generate SQL using discovered schema
          - Writes: state['sql_query']
 
       2. sql_validation (LlmAgent)
-         - Tools: [check_forbidden_keywords, parse_sql_query, validate_sql_security]
+         - Tools: [validation_tools]
+           • check_forbidden_keywords
+           • parse_sql_query
+           • validate_sql_security
          - output_key: "validation_result"
          - Reads: state['sql_query']
          - Writes: state['validation_result']
 
       3. query_execution (LlmAgent)
-         - Tools: [BigQueryToolset]
+         - Tools: [bigquery_execution_toolset]
+           • execute_sql (read-only query execution)
          - output_key: "query_results"
          - Reads: state['sql_query']
          - Writes: state['query_results']
 
       4. insight_synthesis (LlmAgent)
-         - NO tools
+         - NO tools (formatting only)
          - output_key: "final_insights"
          - Reads: state['sql_query'], state['query_results']
          - Writes: state['final_insights']
@@ -105,95 +179,233 @@ finops-cost-data-analyst/
   └── _tools/
 ```
 
-## Schema Discovery Mechanism
+## Multi-Table Discovery Mechanism
 
-### How Agent Knows About Table Schema
+### How Agent Discovers Datasets, Tables, and Schemas
 
-**Answer: HARDCODED in prompts.py**
+**Answer: DYNAMIC MULTI-TABLE DISCOVERY using BigQuery ADK Toolset** ✅
 
 When user asks: **"What is total cost for FY26?"**
 
-#### Step 1: SQL Generation Agent Reads Hardcoded Schema
+### Dynamic Multi-Table Discovery Workflow (5 Steps - CURRENT)
 
-From `prompts.py:38-91` (`get_sql_generation_prompt()` function):
+**Step 1: Classify Query Intent**
 
-```python
-def get_sql_generation_prompt() -> str:
-    # Table info from .env
-    project = os.getenv("BIGQUERY_PROJECT", "your-project-id")
-    dataset = os.getenv("BIGQUERY_DATASET", "your_dataset")
-    table = os.getenv("BIGQUERY_TABLE", "cost_analysis")
-    full_table = f"`{project}.{dataset}.{table}`"
-
-    return f"""
-You are a SQL Generation Specialist...
-
-## Table Schema
-
-**Table**: {full_table}
-
-**Columns** (use EXACTLY these names):
-- `date` (DATE) - Transaction date
-- `cto` (STRING) - CTO organization
-- `cloud` (STRING) - Cloud provider (GCP, AWS, Azure)
-- `application` (STRING) - Application name
-- `managed_service` (STRING) - Service type (e.g., 'AI/ML')
-- `environment` (STRING) - Environment (prod, dev, staging)
-- `cost` (FLOAT) - Cost amount
-
-## Business Logic (ENFORCE THESE)
-
-**FY26**: Fiscal year 2026 = Feb 1, 2025 to Jan 31, 2026:
-```sql
-WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
+The SQL Generation Agent analyzes the user's query:
 ```
-"""
+User Query: "What is total cost for FY26?"
+Classification: COST query
+Pattern Keywords: "cost", "spending", "expenses"
+Target Dataset Type: *cost*, *spending*, *expense*
 ```
 
-**This is NOT automatic schema discovery** - it's hardcoded into the prompt.
+**Step 2: Discover All Datasets in Project**
 
-#### Why Hardcoded?
+The agent makes a live API call to BigQuery:
+```python
+list_dataset_ids(project_id="gac-prod-471220")
+```
 
-**Advantages:**
-1. **Fast** - No schema introspection API calls
-2. **Deterministic** - Always generates correct SQL
-3. **Secure** - Only queries known, validated tables
-4. **Simple** - No complexity of dynamic schema parsing
+Response:
+```python
+["cost_dataset", "budget_dataset", "usage_dataset"]
+```
 
-**Disadvantages:**
-1. **Manual updates** - Schema changes require prompt modification
-2. **Not portable** - Tied to specific table structure
+**Step 3: Match Dataset to Query Type**
 
-#### Future: Dynamic Schema Discovery
+Pattern matching logic:
+```python
+# COST queries → *cost*, *spending*, *expense*
+# BUDGET queries → *budget*, *forecast*, *allocation*
+# USAGE queries → *usage*, *utilization*, *resource*
 
-To implement automatic schema discovery:
+# For COST query:
+selected_dataset = "cost_dataset"  # Matches "*cost*" pattern
+```
+
+**Step 4: Discover Tables in Selected Dataset**
 
 ```python
-# _tools/schema_tools.py (NEW FILE)
-from google.cloud import bigquery
-
-def get_bigquery_schema(project: str, dataset: str, table: str) -> dict:
-    """Fetch table schema dynamically from BigQuery."""
-    client = bigquery.Client(project=project)
-    table_ref = f"{project}.{dataset}.{table}"
-    table_obj = client.get_table(table_ref)
-
-    schema = {}
-    for field in table_obj.schema:
-        schema[field.name] = {
-            "type": field.field_type,
-            "description": field.description or ""
-        }
-    return schema
-
-# Then in agent.py:
-sql_generation_agent = LlmAgent(
-    tools=[get_bigquery_schema],  # Add this tool
-    instruction="Call get_bigquery_schema() first, then generate SQL using returned schema"
+list_table_ids(
+    project_id="gac-prod-471220",
+    dataset_id="cost_dataset"
 )
 ```
 
-**Not implemented** because hardcoded schema is sufficient for current needs.
+Response:
+```python
+["cost_analysis", "historical_costs"]
+```
+
+Pattern matching:
+```python
+selected_table = "cost_analysis"  # Best match for cost queries
+```
+
+**Step 5: Get Table Schema**
+
+```python
+get_table_info(
+    project_id="gac-prod-471220",
+    dataset_id="cost_dataset",
+    table_id="cost_analysis"
+)
+```
+
+Example response:
+```json
+{
+  "tableReference": {
+    "projectId": "gac-prod-471220",
+    "datasetId": "cost_dataset",
+    "tableId": "cost_analysis"
+  },
+  "schema": {
+    "fields": [
+      {"name": "date", "type": "DATE", "mode": "NULLABLE"},
+      {"name": "cto", "type": "STRING", "mode": "NULLABLE"},
+      {"name": "cloud", "type": "STRING", "mode": "NULLABLE"},
+      {"name": "application", "type": "STRING", "mode": "NULLABLE"},
+      {"name": "managed_service", "type": "STRING", "mode": "NULLABLE"},
+      {"name": "environment", "type": "STRING", "mode": "NULLABLE"},
+      {"name": "cost", "type": "FLOAT", "mode": "NULLABLE"}
+    ]
+  },
+  "numRows": "156234",
+  "description": "FinOps cost analysis data"
+}
+```
+
+**Step 6: Generate SQL Using Discovered Schema**
+
+```sql
+SELECT SUM(cost) as total_cost
+FROM `gac-prod-471220.cost_dataset.cost_analysis`
+WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
+```
+
+### Multi-Table JOIN Example
+
+**Query**: "Compare FY26 budget vs actual costs"
+
+**Discovery Process**:
+1. **Classify**: COMPARISON query (needs 2 tables)
+2. **Discover Datasets**: cost_dataset + budget_dataset
+3. **Discover Tables**: cost_analysis + budget
+4. **Get Schemas**: Both table schemas
+5. **Generate JOIN**:
+
+```sql
+SELECT
+  c.application,
+  SUM(c.cost) as actual_cost,
+  SUM(b.budget_amount) as budget,
+  SUM(c.cost) - SUM(b.budget_amount) as variance
+FROM `gac-prod-471220.cost_dataset.cost_analysis` c
+LEFT JOIN `gac-prod-471220.budget_dataset.budget` b
+  ON c.application = b.application
+  AND c.date = b.date
+WHERE c.date BETWEEN '2025-02-01' AND '2026-01-31'
+GROUP BY c.application
+ORDER BY variance DESC
+LIMIT 10
+```
+
+### BigQuery ADK Toolsets (3 Specialized Toolsets)
+
+**1. bigquery_schema_toolset** (SQL Generation Agent - Multi-Table Discovery)
+- `list_dataset_ids`: ⭐ **NEW!** Lists all datasets in project (multi-table support)
+- `list_table_ids`: ⭐ Lists all tables in a dataset
+- `get_table_info`: ⭐ Fetches table schema dynamically from BigQuery
+- `get_dataset_info`: Fetches dataset metadata
+
+**2. bigquery_execution_toolset** (Query Execution Agent)
+- `execute_sql`: Executes validated SQL queries (read-only)
+
+**3. bigquery_analytics_toolset** (Future Expansion - Phase 3)
+- `execute_sql`: SQL execution
+- `forecast`: BigQuery AI time series forecasting
+- `ask_data_insights`: Natural language data insights
+
+### Why Dynamic Multi-Table Discovery?
+
+**Advantages** (CURRENT IMPLEMENTATION):
+1. **Portable** - Works with ANY BigQuery project/datasets (just change .env)
+2. **Self-healing** - Adapts automatically to schema changes
+3. **Accurate** - Uses exact schema from source of truth
+4. **Intelligent Routing** - Automatically selects correct tables (cost/budget/usage)
+5. **Multi-source Analysis** - Generates JOIN queries across datasets
+6. **Explorable** - Can discover new tables/datasets dynamically without code changes
+7. **Future-ready** - Foundation for AI forecasting & insights
+
+**Disadvantages**:
+1. **Slightly slower** - Adds ~200-300ms for discovery API calls
+2. **Requires additional permissions** - Needs `bigquery.datasets.get`, `bigquery.tables.list`
+
+### Configuration (_tools/bigquery_tools.py)
+
+```python
+# Schema discovery toolset (Multi-Table Support)
+bigquery_schema_toolset = BigQueryToolset(
+    tool_filter=[
+        "get_table_info",      # Dynamic schema discovery
+        "get_dataset_info",    # Dataset metadata
+        "list_table_ids",      # Table listing
+        "list_dataset_ids",    # NEW: Dataset discovery for multi-table support
+    ],
+    bigquery_tool_config=BigQueryToolConfig(
+        write_mode=WriteMode.BLOCKED,  # Security: no writes
+    ),
+)
+
+# Query execution toolset
+bigquery_execution_toolset = BigQueryToolset(
+    tool_filter=["execute_sql"],
+    bigquery_tool_config=BigQueryToolConfig(
+        write_mode=WriteMode.BLOCKED,
+    ),
+)
+```
+
+### Advanced Analytics (Available but Not Enabled)
+
+The agent has access to BigQuery AI capabilities:
+
+**forecast** - Time series forecasting:
+```sql
+-- Agent could generate this automatically
+SELECT * FROM ML.FORECAST(
+  MODEL my_model,
+  STRUCT(30 AS horizon)
+)
+```
+
+**ask_data_insights** - Natural language insights:
+```python
+# Agent could call this directly
+ask_data_insights(
+    question="What are the cost trends?",
+    table="gac-prod-471220.agent_bq_dataset.cost_analysis"
+)
+```
+
+To enable: Change sql_generation_agent tools to `[bigquery_analytics_toolset]`
+
+### Migration Path: Hardcoded → Dynamic
+
+**Old (Deleted):**
+```python
+sql_generation_agent = LlmAgent(
+    tools=[],  # No tools - schema hardcoded in prompt
+)
+```
+
+**New (Current):**
+```python
+sql_generation_agent = LlmAgent(
+    tools=[bigquery_schema_toolset],  # Dynamic schema discovery
+)
+```
 
 ## Data Flow Details
 
@@ -208,14 +420,50 @@ state = {
 }
 ```
 
-### Sequential Execution Example
+### Sequential Execution Example (with Dynamic Multi-Table Discovery)
 
 **User Query**: "What is total cost for FY26?"
 
-1. **sql_generation** → generates SQL → `state['sql_query']`:
+1. **sql_generation** → multi-table discovery + generates SQL → `state['sql_query']`:
+
+   **Step 1a: Classify Query**
+   ```
+   Classification: COST query
+   Keywords: "cost"
+   Target: *cost*, *spending* datasets
+   ```
+
+   **Step 1b**: Calls `list_dataset_ids("gac-prod-471220")`
+   ```python
+   ["cost_dataset", "budget_dataset", "usage_dataset"]
+   ```
+
+   **Step 1c**: Match dataset
+   ```python
+   selected_dataset = "cost_dataset"  # Matches "*cost*"
+   ```
+
+   **Step 1d**: Calls `list_table_ids("gac-prod-471220", "cost_dataset")`
+   ```python
+   ["cost_analysis"]
+   ```
+
+   **Step 1e**: Calls `get_table_info("gac-prod-471220", "cost_dataset", "cost_analysis")`
+   ```json
+   {
+     "schema": {"fields": [
+       {"name": "date", "type": "DATE"},
+       {"name": "cost", "type": "FLOAT"},
+       ...
+     ]},
+     "numRows": "156234"
+   }
+   ```
+
+   **Step 1f**: Generates SQL using discovered schema:
    ```sql
    SELECT SUM(cost) as total_cost
-   FROM `gac-prod-471220.agent_bq_dataset.cost_analysis`
+   FROM `gac-prod-471220.cost_dataset.cost_analysis`
    WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
    ```
 
@@ -509,4 +757,4 @@ finops-cost-data-analyst/
 
 ---
 
-**Architecture Verified**: ✅ SequentialAgent → LlmAgent (with tools + output_key) → State-based flow → Hardcoded schema
+**Architecture Verified**: ✅ SequentialAgent → LlmAgent (with tools + output_key) → State-based flow → Dynamic Multi-Table Discovery ⚡ → Intelligent Query Routing

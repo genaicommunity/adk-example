@@ -30,14 +30,16 @@ from ._tools import (
     check_forbidden_keywords,
     parse_sql_query,
     validate_sql_security,
-    bigquery_toolset,
+    bigquery_toolset,            # Legacy execution toolset
+    bigquery_schema_toolset,     # Schema discovery toolset
+    bigquery_execution_toolset,  # Query execution toolset
 )
 
 logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# SUB-AGENT 1: SQL GENERATION
+# SUB-AGENT 1: SQL GENERATION (with DYNAMIC schema discovery)
 # ============================================================================
 
 sql_generation_agent = LlmAgent(
@@ -45,7 +47,11 @@ sql_generation_agent = LlmAgent(
     name="sql_generation",
     instruction=get_sql_generation_prompt(),
     output_key="sql_query",  # Stores generated SQL in state['sql_query']
-    # No tools - schema is hardcoded in prompt
+    tools=[bigquery_schema_toolset],  # DYNAMIC schema discovery tools
+    # Tools available:
+    #   - get_table_info: Fetches table schema dynamically from BigQuery
+    #   - get_dataset_info: Fetches dataset metadata
+    #   - list_table_ids: Lists all tables in dataset
     generate_content_config=types.GenerateContentConfig(
         temperature=0.01,  # Very low for deterministic SQL generation
     ),
@@ -81,7 +87,7 @@ query_execution_agent = LlmAgent(
     name="query_execution",
     instruction=get_query_execution_prompt(),
     output_key="query_results",  # Stores BigQuery results in state['query_results']
-    tools=[bigquery_toolset],
+    tools=[bigquery_execution_toolset],  # Dedicated execution toolset (execute_sql only)
     generate_content_config=types.GenerateContentConfig(
         temperature=0.0,  # Deterministic for query execution
     ),
