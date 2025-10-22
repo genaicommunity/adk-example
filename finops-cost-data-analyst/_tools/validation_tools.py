@@ -1,6 +1,7 @@
-"""SQL validation tools - functions for validating SQL queries.
+"""SQL validation tools for security and syntax checking.
 
-These tools are used by the SQL Validator Sub-Agent.
+These tools are used by the SQL Validation sub-agent to ensure
+queries are safe and well-formed before execution.
 """
 
 import logging
@@ -8,7 +9,6 @@ import re
 from typing import Tuple
 
 logger = logging.getLogger(__name__)
-
 
 # Forbidden SQL keywords that could indicate SQL injection or destructive operations
 FORBIDDEN_KEYWORDS = [

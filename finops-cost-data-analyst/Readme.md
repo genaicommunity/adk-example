@@ -1,876 +1,445 @@
-# FinOps Cost Insights Agent
+# FinOps Cost Data Analyst Agent
 
-**Production-Ready Multi-Agent AI System for Cloud Financial Operations**
+Enterprise-grade multi-agent AI system for cloud financial operations using Google ADK.
 
-This project is an enterprise-grade multi-agent AI system built with the **Google Agent Development Kit (ADK)**. It provides a conversational interface for FinOps teams, enabling natural language queries about multi-cloud spending across GCP, AWS, and Azure with accurate, data-backed insights.
-
-The system queries cloud billing data from BigQuery using a secure, orchestrated multi-step workflow managed by specialized AI agents.
-
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
-[![ADK](https://img.shields.io/badge/Google-ADK-4285F4)](https://google.github.io/adk-docs/)
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Data Source & Schema](#data-source--schema)
-- [Business Logic](#business-logic)
-- [Project Structure](#project-structure)
-- [Setup & Installation](#setup--installation)
-- [Configuration](#configuration)
-- [Usage Examples](#usage-examples)
-- [Query Examples](#query-examples)
-- [Security](#security)
-- [Evaluation & Testing](#evaluation--testing)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Best Practices](#best-practices)
-
----
-
-## Overview
-
-### Key Features
-
-- **Multi-Agent Architecture**: Hierarchical orchestration with specialized agents for each workflow stage
-- **Natural Language to SQL**: Automatic translation of business questions to optimized BigQuery SQL
-- **Multi-Cloud Support**: Unified cost analysis across GCP, AWS, and Azure
-- **Enterprise Security**: Zero-trust security model using MCP (Model Context Protocol) Toolbox
-- **Production Ready**: Input validation, SQL injection prevention, comprehensive error handling
-- **Scalable Design**: Designed for deployment on Vertex AI Agent Engine or Cloud Run
-- **Cost Optimization**: Built-in analytics for cost trends, anomalies, and forecasting
-- **Chargeback/Showback**: Team, product, and application-level cost attribution
-
-### Use Cases
-
-1. **Executive Reporting**: Monthly cost summaries, YoY comparisons, budget tracking
-2. **Cost Optimization**: Identify high-cost services, anomaly detection, waste reduction
-3. **Chargeback/Showback**: Allocate costs to teams, products, and environments
-4. **Forecasting**: Predict future cloud spending using historical trends
-5. **Multi-Cloud Analysis**: Compare costs across cloud providers
-6. **Compliance**: Track spending against budgets and compliance requirements
-
----
-
-## Tech Stack
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Framework** | Google Agent Development Kit (ADK) v1.14+ | Multi-agent orchestration |
-| **AI Models** | Google Gemini 2.5 Flash | Natural language understanding, SQL generation |
-| **Data Backend** | Google BigQuery | Cloud cost data warehouse |
-| **Security** | MCP Toolbox for Databases | Secure, credential-less database access |
-| **Deployment** | Vertex AI Agent Engine | Managed, scalable agent hosting |
-| **Language** | Python 3.10+ | Core implementation |
-| **Dependencies** | google-adk, google-cloud-aiplatform, toolbox-core | Agent runtime |
-
----
-
-## Architecture
-
-### Multi-Agent Hierarchical System
-
-This project implements a **sequential multi-agent workflow** where each agent has a single, well-defined responsibility. The `OrchestratorAgent` manages the end-to-end flow, passing a shared state object between specialists.
+## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          User Query                                      │
-│                 "What was GenAI cost in FY26?"                          │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      OrchestratorAgent                                   │
-│                    (Sequential Workflow)                                 │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │ Schema Analyst  │ ──► Fetch table schema via MCP
-                    │     Agent       │     describe-table tool
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │  SQL Generator  │ ──► Translate NL → SQL with
-                    │      Agent      │     business logic
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │  SQL Validator  │ ──► Security check: SELECT only,
-                    │      Agent      │     no DROP/DELETE/etc
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ BigQuery Exec   │ ──► Execute validated query via
-                    │      Agent      │     MCP execute-query tool
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ Insight Synth   │ ──► Format results into human-
-                    │      Agent      │     readable insights
-                    └────────┬────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         Final Answer                                     │
-│  "The GenAI cost in FY26 (Feb 2025 - Jan 2026) was $1,234,567.89"     │
-└─────────────────────────────────────────────────────────────────────────┘
+Root Agent (SequentialAgent) - "FinOpsCostAnalystOrchestrator"
+    ↓ orchestrates via sub_agents=[]
+Sub-Agents (LlmAgent instances with tools + output_key)
+    ├─ sql_generation     → state['sql_query']
+    ├─ sql_validation     → state['validation_result'] (tools: validation functions)
+    ├─ query_execution    → state['query_results'] (tools: BigQueryToolset)
+    └─ insight_synthesis  → state['final_insights']
 ```
 
-### Agent Roles & Responsibilities
+## How It Works: Example Query
 
-| Agent | Location | Role | Key Responsibilities |
-|-------|----------|------|---------------------|
-| **OrchestratorAgent** | `agents/orchestrator/` | Team Lead | Manages sequential workflow, coordinates state, returns final response |
-| **SchemaAnalystAgent** | `agents/schema_analyst/` | Data Expert | Fetches table schema using MCP `describe-table`, provides context |
-| **SQLGenerationAgent** | `agents/sql_generator/` | SQL Engineer | **CRITICAL**: Translates NL to GoogleSQL with business logic enforcement |
-| **SQLValidatorAgent** | `agents/sql_validator/` | Security Guard | Validates SQL safety: SELECT only, no injection vectors |
-| **BigQueryExecutorAgent** | `agents/bq_executor/` | Query Runner | Executes validated SQL via MCP `execute-query` tool |
-| **InsightSynthesizerAgent** | `agents/insight_synthesizer/` | Business Analyst | Transforms raw data into conversational insights |
+**User asks**: "What is the total cost for FY26?"
 
-### Design Principles
+### Step-by-Step Flow
 
-1. **Separation of Concerns**: Each agent has ONE job
-2. **Zero Trust Security**: No direct database credentials in agent code
-3. **Fail-Safe Validation**: Multi-layer security checks before execution
-4. **Stateful Orchestration**: Shared state object maintains context across agents
-5. **Model Context Protocol**: Standardized tool interfaces for database operations
-6. **Testability**: Each agent can be tested in isolation
+1. **SQL Generation Agent** (agent.py:43-52)
+   - Reads hardcoded schema from prompt (prompts.py:38-91)
+   - Schema includes: table name, columns (date, cto, cloud, application, managed_service, environment, cost)
+   - Business rules hardcoded: FY26 = Feb 1, 2025 to Jan 31, 2026
+   - Generates SQL:
+     ```sql
+     SELECT SUM(cost) as total_cost
+     FROM `gac-prod-471220.agent_bq_dataset.cost_analysis`
+     WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
+     ```
+   - Writes to `state['sql_query']`
 
----
+2. **SQL Validation Agent** (agent.py:59-72)
+   - Reads `state['sql_query']`
+   - Uses tools (_tools/validation_tools.py):
+     - `check_forbidden_keywords()` - blocks DROP, DELETE, INSERT, etc.
+     - `parse_sql_query()` - validates SQL syntax
+     - `validate_sql_security()` - comprehensive security check
+   - Writes "VALID" to `state['validation_result']`
 
-## Data Source & Schema
+3. **Query Execution Agent** (agent.py:79-88)
+   - Reads `state['sql_query']`
+   - Uses BigQueryToolset (_tools/bigquery_tools.py)
+   - Connects to BigQuery with credentials from .env
+   - Executes SQL and returns results
+   - Writes to `state['query_results']`:
+     ```
+     total_cost
+     27442275.64
+     ```
 
-### BigQuery Table
+4. **Insight Synthesis Agent** (agent.py:95-104)
+   - Reads `state['query_results']`
+   - Formats into business-friendly output
+   - Writes to `state['final_insights']`:
+     ```
+     The total cost for FY26 (February 2025 - January 2026) was $27,442,275.64.
 
-**Fully Qualified Table Name**: Configured via environment variables (see [Configuration](#configuration))
+     This represents cloud spending across all providers and applications
+     for the current fiscal year.
+     ```
+   - Returns final answer to user
 
-- **Project**: Set via `BIGQUERY_PROJECT` environment variable
-- **Dataset**: Set via `BIGQUERY_DATASET` environment variable
-- **Table**: Set via `BIGQUERY_TABLE` environment variable
+## Schema Discovery Mechanism
 
-### Schema Definition
+**Q: How does the agent know about schema and table details?**
 
-| Field Name | Mode | Type | Description | Example Values |
-|------------|------|------|-------------|----------------|
-| `date` | REQUIRED | DATE | Date of cost record | `2025-10-15` |
-| `cto` | NULLABLE | STRING | Chief Technology Officer / Organization | `Engineering`, `Product`, `Data Science` |
-| `cloud` | REQUIRED | STRING | Cloud provider | `GCP`, `AWS`, `Azure` |
-| `tr_product_pillar_team` | NULLABLE | STRING | Product pillar or team | `Payments Platform`, `User Services` |
-| `tr_subpillar_name` | NULLABLE | STRING | Sub-pillar or sub-team | `Payment Gateway`, `Auth Service` |
-| `tr_product_id` | NULLABLE | INTEGER | Product identifier | `1001`, `2045` |
-| `tr_product` | NULLABLE | STRING | Product name | `Mobile App`, `Web Platform` |
-| `apm_id` | NULLABLE | STRING | Application Performance Monitoring ID | `APM-12345` |
-| `application` | REQUIRED | STRING | Application name | `payment-service`, `user-api` |
-| `service_name` | NULLABLE | STRING | Service within application | `auth-microservice`, `db-replica` |
-| `managed_service` | REQUIRED | STRING | Cloud managed service type | `Compute Engine`, `Cloud Storage`, `RDS`, `AI/ML` |
-| `environment` | REQUIRED | STRING | Environment type | `production`, `staging`, `development` |
-| `cost` | REQUIRED | FLOAT | Daily cost in USD | `1234.56` |
+**A: HARDCODED in prompts.py, NOT automatic discovery**
 
-### Schema DDL
+### Schema Configuration (prompts.py:38-91)
+
+The SQL Generation Agent prompt **hardcodes** the following:
+
+1. **Table Information** (from .env):
+   ```python
+   project = os.getenv("BIGQUERY_PROJECT", "your-project-id")
+   dataset = os.getenv("BIGQUERY_DATASET", "your_dataset")
+   table = os.getenv("BIGQUERY_TABLE", "cost_analysis")
+   full_table = f"`{project}.{dataset}.{table}`"
+   ```
+
+2. **Column Schema** (hardcoded in prompt):
+   ```
+   - date (DATE) - Transaction date
+   - cto (STRING) - CTO organization
+   - cloud (STRING) - Cloud provider (GCP, AWS, Azure)
+   - application (STRING) - Application name
+   - managed_service (STRING) - Service type (e.g., 'AI/ML')
+   - environment (STRING) - Environment (prod, dev, staging)
+   - cost (FLOAT) - Cost amount
+   ```
+
+3. **Business Logic** (hardcoded in prompt):
+   ```
+   FY26 = Feb 1, 2025 to Jan 31, 2026
+   FY25 = Feb 1, 2024 to Jan 31, 2025
+   GenAI queries → WHERE managed_service = 'AI/ML'
+   ```
+
+### Why Hardcoded?
+
+**Pros:**
+- Fast - no schema introspection overhead
+- Deterministic - always generates correct SQL
+- Secure - only queries known tables
+- Simple - no dynamic schema discovery complexity
+
+**Cons:**
+- Schema changes require prompt updates
+- Not portable to other datasets without modification
+
+### Future Enhancement: Dynamic Schema Discovery
+
+To make schema discovery automatic:
+1. Create a new tool: `get_bigquery_schema(project, dataset, table)`
+2. Add to SQL Generation Agent's tools
+3. Agent calls tool before generating SQL
+4. Prompt updated: "Use schema from get_bigquery_schema() result"
+
+**Not implemented** because hardcoded schema meets current requirements.
+
+## Prerequisites
+
+1. **Python 3.10+**
+2. **Google Cloud Project** with BigQuery enabled
+3. **Google ADK**: `pip install google-adk`
+4. **Authentication**: `gcloud auth application-default login`
+5. **IAM Permissions** (minimum):
+   - `roles/bigquery.dataViewer`
+   - `roles/bigquery.jobUser`
+
+## Environment Setup
+
+Create `.env` file in project root:
+
+```bash
+# BigQuery Configuration (REQUIRED)
+BIGQUERY_PROJECT=gac-prod-471220          # Your GCP project ID
+BIGQUERY_DATASET=agent_bq_dataset          # BigQuery dataset name
+BIGQUERY_TABLE=cost_analysis               # BigQuery table name
+
+# Model Configuration (Optional)
+ROOT_AGENT_MODEL=gemini-2.0-flash-exp      # Model for all agents
+```
+
+## BigQuery Table Schema
+
+Your BigQuery table must have this schema:
 
 ```sql
-CREATE TABLE `your-project-id.your_dataset.cost_analysis` (
-  date DATE NOT NULL,
+CREATE TABLE `project.dataset.cost_analysis` (
+  date DATE,
   cto STRING,
-  cloud STRING NOT NULL,
-  application STRING NOT NULL,
-  managed_service STRING NOT NULL,
-  environment STRING NOT NULL,
-  cost FLOAT64 NOT NULL
-)
-PARTITION BY date
-CLUSTER BY cloud, environment, managed_service;
+  cloud STRING,
+  application STRING,
+  managed_service STRING,
+  environment STRING,
+  cost FLOAT64
+);
 ```
 
-**Note**: Replace `your-project-id` and `your_dataset` with your actual BigQuery project and dataset names.
-
-### Data Characteristics
-
-- **Row Count**: ~10M+ rows (grows daily)
-- **Date Range**: 2024-02-01 to present
-- **Partitioning**: Daily partitions by `date` for query optimization
-- **Clustering**: `cloud`, `environment`, `managed_service` for performance
-- **Update Frequency**: Daily batch updates (typically 2 AM UTC)
-- **Data Retention**: 2+ years historical data
-
----
-
-## Business Logic
-
-### Critical Business Rules
-
-The `SQLGenerationAgent` enforces these **hard-coded business rules** via system prompts in `agents/sql_generator/prompts.py`:
-
-#### 1. GenAI Cost Mapping
-
-**Rule**: Any query containing "GenAI", "AI cost", or "machine learning cost" MUST filter:
-
-```sql
-WHERE managed_service = 'AI/ML'
-```
-
-**Examples**:
-- User: "What was the GenAI cost last month?"
-- SQL: `SELECT SUM(cost) FROM table WHERE managed_service = 'AI/ML' AND date >= '2025-09-01' AND date < '2025-10-01'`
-
-#### 2. Fiscal Year 2026 (FY26) Date Range
-
-**Rule**: Any query for "FY26" MUST translate to:
-
-```sql
-WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
-```
-
-**Fiscal Year Definition**: February 1 to January 31
-
-#### 3. Fiscal Year 2025 (FY25) Date Range
-
-**Rule**: Any query for "FY25" MUST translate to:
-
-```sql
-WHERE date BETWEEN '2024-02-01' AND '2025-01-31'
-```
-
-### Why These Rules Matter
-
-- **Consistency**: Ensures all teams use the same definitions for "GenAI" and fiscal years
-- **Compliance**: Aligns with company financial reporting standards
-- **Accuracy**: Prevents manual calculation errors in executive reports
-- **Auditability**: Centralized logic makes it easy to trace decisions
-
----
-
-## Project Structure
-
-```
-finops-cost-data-analyst/
-├── README.md                          # This file
-├── .mcp.json                          # MCP Toolbox configuration (not in git)
-├── .env                               # Environment variables (not in git)
-├── .gitignore                         # Git ignore rules
-├── requirements.txt                   # Python dependencies
-├── pyproject.toml                     # Python project metadata
-├── main.py                            # ADK entry point (root_agent)
-│
-├── agents/                            # Agent implementations
-│   ├── __init__.py
-│   │
-│   ├── orchestrator/                  # Orchestrator Agent
-│   │   ├── __init__.py
-│   │   ├── agent.py                   # OrchestratorAgent definition
-│   │   └── prompts.py                 # Orchestration prompts
-│   │
-│   ├── schema_analyst/                # Schema Analyst Agent
-│   │   ├── __init__.py
-│   │   ├── agent.py                   # SchemaAnalystAgent definition
-│   │   └── prompts.py                 # Schema analysis prompts
-│   │
-│   ├── sql_generator/                 # SQL Generator Agent (CRITICAL)
-│   │   ├── __init__.py
-│   │   ├── agent.py                   # SQLGenerationAgent definition
-│   │   └── prompts.py                 # SQL generation + business logic
-│   │
-│   ├── sql_validator/                 # SQL Validator Agent
-│   │   ├── __init__.py
-│   │   ├── agent.py                   # SQLValidatorAgent definition
-│   │   └── prompts.py                 # SQL validation rules
-│   │
-│   ├── bq_executor/                   # BigQuery Executor Agent
-│   │   ├── __init__.py
-│   │   ├── agent.py                   # BigQueryExecutorAgent definition
-│   │   └── prompts.py                 # Execution prompts
-│   │
-│   └── insight_synthesizer/           # Insight Synthesizer Agent
-│       ├── __init__.py
-│       ├── agent.py                   # InsightSynthesizerAgent definition
-│       └── prompts.py                 # Insight formatting prompts
-│
-├── tools/                             # Custom tools (if needed)
-│   └── __init__.py
-│
-├── eval/                              # Evaluation & testing
-│   ├── __init__.py
-│   ├── test_finops_agent.py          # Pytest evaluation tests
-│   └── eval_data/                     # Test cases
-│       ├── genai_cost.test.json      # GenAI cost test
-│       ├── fy26_total.test.json      # FY26 total cost test
-│       └── config.json                # Eval configuration
-│
-├── deployment/                        # Deployment scripts
-│   ├── deploy_vertex.py              # Vertex AI deployment
-│   ├── deploy_cloudrun.py            # Cloud Run deployment
-│   └── Dockerfile                    # Container image
-│
-└── docs/                              # Additional documentation
-    ├── architecture.md                # Detailed architecture
-    ├── security.md                    # Security design
-    └── api_reference.md               # API reference
-```
-
-### Key Files
-
-- **`main.py`**: Entry point defining `root_agent` for ADK
-- **`agents/orchestrator/agent.py`**: Main orchestration logic
-- **`agents/sql_generator/prompts.py`**: **CRITICAL** - Contains business logic
-- **`.mcp.json`**: MCP Toolbox server configuration
-- **`requirements.txt`**: Python dependencies
-
----
-
-## Setup & Installation
-
-### Prerequisites
-
-- **Python**: 3.10 or higher
-- **Google Cloud SDK**: `gcloud` CLI installed and authenticated
-- **BigQuery Access**: Read permissions on your BigQuery cost analysis table
-- **Google GenAI API Key**: For Gemini model access
-
-### Installation Steps
-
-#### 1. Clone the Repository
+## Installation
 
 ```bash
-git clone https://github.com/your-org/finops-cost-agent.git
-cd finops-cost-agent
-```
+# 1. Install dependencies
+pip install google-adk python-dotenv
 
-#### 2. Create Virtual Environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-#### 3. Install Dependencies
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-**`requirements.txt` Contents**:
-```
-google-adk>=1.14
-google-cloud-aiplatform[adk,agent-engines]>=1.93.0
-google-cloud-bigquery>=3.12.0
-toolbox-core>=0.3.0
-python-dotenv>=1.0.1
-pydantic>=2.11.3
-pytest>=8.3.5
-pytest-asyncio>=0.26.0
-```
-
-#### 4. Authenticate with Google Cloud
-
-```bash
+# 2. Authenticate with Google Cloud
 gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
+
+# 3. Verify installation
+python3 test_simple.py
 ```
 
-#### 5. Download MCP Toolbox Binary
+## Run the Agent
 
-**Option A: Direct Download**
-```bash
-export OS="darwin/arm64"  # Options: linux/amd64, darwin/arm64, darwin/amd64, windows/amd64
-curl -O https://storage.googleapis.com/genai-toolbox/v0.12.0/$OS/toolbox
-chmod +x toolbox
-mv toolbox /usr/local/bin/  # Or keep in project root
-```
-
-**Option B: Use Existing Installation**
-```bash
-which toolbox  # Verify toolbox is on PATH
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root (use `.env.example` as template):
+### Option 1: Web Interface (Recommended)
 
 ```bash
-# Google GenAI API Configuration
-GOOGLE_API_KEY=your-google-api-key-here
-
-# Google Cloud Configuration (for BigQuery via service account)
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
-GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-
-# BigQuery Configuration
-BIGQUERY_PROJECT=your-bigquery-project-id
-BIGQUERY_DATASET=your_dataset_name
-BIGQUERY_TABLE=cost_analysis
-
-# Model Configuration
-ROOT_AGENT_MODEL=gemini-2.0-flash-exp
-SQL_GENERATOR_MODEL=gemini-2.0-flash-exp
-TEMPERATURE=0.01
-
-# Logging
-LOG_LEVEL=INFO
-```
-
-**Important Notes**:
-- Replace all `your-*` placeholders with your actual values
-- See `.env.example` for a complete template
-- The `.env` file should never be committed to version control
-
-### BigQuery Authentication
-
-This agent uses service account authentication for BigQuery access. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to your service account JSON key file:
-
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
-```
-
-Or add it to your `.env` file as shown above.
-
----
-
-## Usage Examples
-
-### Running Locally
-
-#### 1. Start ADK Web Interface
-
-```bash
+# From parent directory (google-adk-agents/)
+cd /path/to/google-adk-agents
 adk web
 ```
 
-Open browser to: `http://localhost:8000`
+Then:
+1. Visit http://localhost:8000
+2. Select `finops-cost-data-analyst` from dropdown
+3. Start chatting!
 
-#### 2. Example Interactions
-
-**Query 1: GenAI Cost in FY26**
-```
-User: What was the total GenAI cost in FY26?
-
-Agent: The total GenAI cost in FY26 (February 2025 - January 2026)
-       was $1,234,567.89.
-```
-
-**Query 2: Top 5 Applications**
-```
-User: Show me the top 5 most expensive applications last month
-
-Agent: Here are the top 5 applications by cost in September 2025:
-       1. payment-service: $45,678.90
-       2. user-api: $34,567.80
-       3. data-pipeline: $23,456.70
-       4. ml-training: $12,345.60
-       5. web-frontend: $11,234.50
-```
-
-**Query 3: Cloud Provider Comparison**
-```
-User: Compare costs across GCP, AWS, and Azure for Q3 2025
-
-Agent: Cloud cost comparison for Q3 2025 (July-September):
-       - GCP: $567,890.12 (45%)
-       - AWS: $432,109.87 (34%)
-       - Azure: $265,432.10 (21%)
-       Total: $1,265,432.09
-```
-
-### Running via CLI
+### Option 2: CLI
 
 ```bash
-# Interactive CLI mode
-adk run
-
-# Single query mode
-adk query "What was the GenAI cost in FY26?"
+cd finops-cost-data-analyst
+adk run --agent agent:root_agent
 ```
 
----
+### Option 3: Programmatic
 
-## Query Examples
+```python
+import os
+os.chdir('/path/to/finops-cost-data-analyst')
 
-### Cost Analysis Queries
+from agent import root_agent
 
-```sql
--- Total cost by cloud provider (last 30 days)
-SELECT
-  cloud,
-  SUM(cost) as total_cost
-FROM `your-project.your_dataset.cost_analysis`
-WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
-GROUP BY cloud
-ORDER BY total_cost DESC;
-
--- Top 10 applications by cost (current month)
-SELECT
-  application,
-  SUM(cost) as total_cost
-FROM `your-project.your_dataset.cost_analysis`
-WHERE date >= DATE_TRUNC(CURRENT_DATE(), MONTH)
-GROUP BY application
-ORDER BY total_cost DESC
-LIMIT 10;
-
--- GenAI cost trend (FY26)
-SELECT
-  DATE_TRUNC(date, MONTH) as month,
-  SUM(cost) as monthly_cost
-FROM `your-project.your_dataset.cost_analysis`
-WHERE
-  managed_service = 'AI/ML'
-  AND date BETWEEN '2025-02-01' AND '2026-01-31'
-GROUP BY month
-ORDER BY month;
+# Run query
+response = root_agent.run("What is total cost for FY26?")
+print(response.state['final_insights'])
 ```
 
-**Note**: Replace `your-project.your_dataset` with your actual BigQuery project and dataset names (or use environment variable references).
-
-### Natural Language Query Examples
-
-**Cost Trends**:
-- "What's the daily cost trend for the last week?"
-- "Show me month-over-month cost growth for 2025"
-- "What was the cost on October 15th, 2025?"
-
-**Optimization**:
-- "Which services cost more than $10,000 last month?"
-- "Find applications with cost increases over 50% this quarter"
-- "What are the most expensive managed services in GCP?"
-
-**Chargeback/Showback**:
-- "Total cost per CTO for Q3 2025"
-- "Break down costs by product pillar team"
-- "Cost allocation by environment (prod vs staging)"
-
-**Multi-Cloud**:
-- "Compare GCP vs AWS costs this year"
-- "What percentage of total cost is Azure?"
-- "Show me cloud cost distribution"
-
-**Forecasting**:
-- "Based on current trends, what will next month's cost be?"
-- "Projected annual spend for GenAI services"
-- "Cost forecast for Q4 2025"
-
----
-
-## Security
-
-### Zero-Trust Architecture
-
-This agent implements a **zero-trust security model**:
-
-1. **No Direct Credentials**: Agent code never handles database credentials
-2. **MCP Broker Pattern**: All database access is mediated by MCP Toolbox
-3. **Application Default Credentials**: MCP server uses ADC for auth
-4. **Least Privilege**: Agents only have access to pre-defined tools
-5. **SQL Injection Prevention**: Multi-layer validation before execution
-
-### Security Layers
+## Example Queries
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ Layer 1: User Input Validation                               │
-│ - Schema validation in SchemaAnalystAgent                    │
-└──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Layer 2: SQL Generation with Business Logic                  │
-│ - Template-based SQL generation                              │
-│ - Parameterized queries                                      │
-└──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Layer 3: SQL Validation (SQLValidatorAgent)                  │
-│ - SELECT-only enforcement                                    │
-│ - Forbidden keyword detection (DROP, DELETE, etc.)           │
-│ - Syntax validation                                          │
-└──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Layer 4: MCP Toolbox Execution Boundary                      │
-│ - No direct database access from agent                       │
-│ - MCP server validates query before execution                │
-│ - ADC authentication                                         │
-└──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────┐
-│ Layer 5: BigQuery IAM & VPC                                  │
-│ - IAM role-based access control                              │
-│ - VPC Service Controls (optional)                            │
-│ - Query audit logging                                        │
-└──────────────────────────────────────────────────────────────┘
+"What is the total cost for FY26?"
+"What are the top 3 most expensive applications?"
+"Show me GenAI costs by cloud provider"
+"Which managed services cost the most in production?"
+"Compare FY25 vs FY26 spending"
 ```
 
-### SQL Validation Rules
-
-The `SQLValidatorAgent` enforces:
-
-- ✅ **Allowed**: `SELECT`, `WITH`, `FROM`, `WHERE`, `GROUP BY`, `ORDER BY`, `LIMIT`
-- ❌ **Forbidden**: `DROP`, `DELETE`, `INSERT`, `UPDATE`, `CREATE`, `ALTER`, `GRANT`, `REVOKE`
-- ❌ **Forbidden**: `;` (prevents statement chaining)
-- ❌ **Forbidden**: `--`, `/**/` (prevents comment injection)
-
-### IAM Permissions Required
-
-**For Local Development**:
-```
-roles/bigquery.dataViewer       # Read table data
-roles/bigquery.jobUser          # Run queries
-```
-
-**For Service Account** (via GOOGLE_APPLICATION_CREDENTIALS):
-```
-roles/bigquery.dataViewer       # Read table data
-roles/bigquery.jobUser          # Run queries
-```
-
----
-
-## Evaluation & Testing
-
-### Test Structure
+## Project Structure (Current)
 
 ```
-eval/
-├── test_finops_agent.py          # Pytest test runner
-└── eval_data/
-    ├── genai_fy26.test.json      # GenAI + FY26 test
-    ├── top_apps.test.json        # Top applications test
-    ├── cloud_comparison.test.json # Multi-cloud test
-    └── config.json                # Test configuration
+finops-cost-data-analyst/              ← Run 'adk web' from PARENT directory
+├── agent.py                           ← Root SequentialAgent (ADK entry point)
+├── prompts.py                         ← All prompts with hardcoded schema
+├── _tools/                            ← Tools package (underscore hides from ADK)
+│   ├── __init__.py                    ← Exports all tools
+│   ├── validation_tools.py            ← SQL security validation functions
+│   └── bigquery_tools.py              ← BigQueryToolset configuration
+├── eval/
+│   └── eval_data/
+│       └── simple.test.json           ← Eval test cases
+├── test_simple.py                     ← Architecture validation test
+├── .env                               ← Environment configuration (gitignored)
+├── .env.example                       ← Example environment file
+├── Readme.md                          ← This file
+└── CLAUDE.md                          ← Developer guide
 ```
 
-### Running Tests
+**IMPORTANT**: ADK expects this flat structure. Don't nest `agent.py` in subdirectories.
 
-```bash
-# Run all evaluation tests
-pytest eval/test_finops_agent.py -v
+## Data Flow Details
 
-# Run specific test
-pytest eval/test_finops_agent.py::test_genai_fy26 -v
+### State Dictionary (Shared Memory)
 
-# Run with detailed output
-pytest eval/test_finops_agent.py -v -s
-
-# Generate coverage report
-pytest eval/ --cov=agents --cov-report=html
-```
-
-### Example Test Case
-
-**`eval/eval_data/genai_fy26.test.json`**:
-```json
-{
-  "query": "What was the total GenAI cost in FY26?",
-  "expected_response_contains": [
-    "GenAI",
-    "FY26",
-    "February 2025",
-    "January 2026"
-  ],
-  "expected_sql_contains": [
-    "managed_service = 'AI/ML'",
-    "date BETWEEN '2025-02-01' AND '2026-01-31'"
-  ]
+```python
+state = {
+    'sql_query': str,           # From sql_generation (agent.py:47)
+    'validation_result': str,    # From sql_validation (agent.py:62)
+    'query_results': dict,       # From query_execution (agent.py:82)
+    'final_insights': str        # From insight_synthesis (agent.py:98)
 }
 ```
 
-### ADK Web UI Evaluation
+### Sequential Execution Pattern
 
-1. Navigate to `http://localhost:8000`
-2. Click **Eval** tab
-3. Create new eval set
-4. Upload test cases from `eval/eval_data/`
-5. Run evaluation
-6. View pass/fail results
+Each agent:
+1. Reads from `state[...]` (previous agent's output)
+2. Performs its specialized task
+3. Writes to `state[output_key]` for next agent
 
----
+**No tools on root agent** - only sub-agents have tools.
 
-## Deployment
+## Testing
 
-### Vertex AI Agent Engine (Recommended)
-
-#### 1. Build Deployment Package
-
+### Structural Test
 ```bash
-# Create wheel file
-uv build --wheel --out-dir deployment
-
-# Or use setuptools
-python -m build --wheel --outdir deployment
+python3 test_simple.py
 ```
 
-#### 2. Deploy to Vertex AI
+Validates:
+- Root agent is SequentialAgent
+- All sub-agents are LlmAgent
+- Each sub-agent has `output_key`
+- Tools are correctly attached
 
+### Evaluation Framework
 ```bash
-cd deployment
-python deploy_vertex.py --create
-
-# Example output:
-# Agent deployed: projects/YOUR_PROJECT/locations/us-central1/reasoningEngines/1234567890
+adk eval --eval-file eval/eval_data/simple.test.json
 ```
 
-#### 3. Test Deployment
+Tests end-to-end queries against expected results.
 
+### Manual Testing
 ```bash
-export RESOURCE_ID=1234567890
-export USER_ID=test-user
-python deployment/test_deployment.py --resource_id=$RESOURCE_ID --user_id=$USER_ID
+# Test import
+python3 -c "from agent import root_agent; print(root_agent.name)"
+
+# Test with .env
+python3 -c "
+from dotenv import load_dotenv
+load_dotenv()
+from agent import root_agent
+print(f'Loaded: {root_agent.name} with {len(root_agent.sub_agents)} sub-agents')
+"
 ```
 
-### Google Cloud Run
+## Key Design Principles
 
-#### 1. Build Container Image
+✅ **SequentialAgent for orchestration** - Root uses `sub_agents=[]`, NOT `tools=[]`
+✅ **LlmAgent for tasks** - Each sub-agent has `output_key` parameter
+✅ **Relative imports** - Use `from .prompts import ...` (not `from prompts import ...`)
+✅ **State-based flow** - Data flows via `state['key']` between agents
+✅ **Tool isolation** - Only sub-agents have tools, never root
+✅ **Security first** - SQL validation before execution
+✅ **Hardcoded schema** - Fast, deterministic, secure (no dynamic discovery)
+
+## Common Issues & Fixes
+
+### ❌ "Root Agent not found" in adk web
+**Fix**: Run `adk web` from **parent directory**, not from inside `finops-cost-data-analyst/`
 
 ```bash
-docker build -t gcr.io/YOUR_PROJECT/finops-agent:latest .
-docker push gcr.io/YOUR_PROJECT/finops-agent:latest
+# WRONG
+cd finops-cost-data-analyst && adk web
+
+# CORRECT
+cd google-adk-agents && adk web
 ```
 
-#### 2. Deploy to Cloud Run
+### ❌ "No module named 'prompts'"
+**Fix**: Use **relative imports** in `agent.py`:
+
+```python
+# WRONG
+from prompts import ROOT_AGENT_DESCRIPTION
+
+# CORRECT
+from .prompts import ROOT_AGENT_DESCRIPTION
+```
+
+### ❌ BigQuery permission denied
+**Fix**: Re-authenticate and check IAM:
 
 ```bash
-gcloud run deploy finops-agent \
-  --image gcr.io/YOUR_PROJECT/finops-agent:latest \
-  --platform managed \
-  --region us-central1 \
-  --memory 2Gi \
-  --set-env-vars GOOGLE_CLOUD_PROJECT=YOUR_PROJECT \
-  --allow-unauthenticated
+gcloud auth application-default login
+gcloud projects get-iam-policy YOUR_PROJECT_ID --flatten="bindings[].members" --filter="bindings.members:user:YOUR_EMAIL"
 ```
 
----
+### ❌ "output_key not found in state"
+**Fix**: Ensure all sub-agents have `output_key` parameter defined.
 
-## Troubleshooting
+## Performance Tuning
 
-### Common Issues
+### Temperature Settings (agent.py)
+- SQL Generation: `0.01` (deterministic SQL)
+- SQL Validation: `0.0` (strict security)
+- Query Execution: `0.0` (deterministic)
+- Insight Synthesis: `0.1` (slight creativity for formatting)
 
-#### 1. BigQuery Permission Denied
+### Model Selection
+- **Production**: `gemini-2.0-flash-exp` (fast, cost-effective)
+- **Complex Queries**: `gemini-pro` (more capable)
+- **Development**: `gemini-2.0-flash-exp` (fastest iteration)
 
-**Error**: `403 Forbidden: Access Denied`
-
-**Solution**:
+Set via `.env`:
 ```bash
-# Verify service account authentication
-echo $GOOGLE_APPLICATION_CREDENTIALS
-
-# Check that service account has required BigQuery permissions:
-# - roles/bigquery.dataViewer
-# - roles/bigquery.jobUser
+ROOT_AGENT_MODEL=gemini-2.0-flash-exp
 ```
 
-#### 2. SQL Validation Failure
+## References
 
-**Error**: `SQL validation failed: forbidden keyword detected`
+- **ADK Documentation**: https://google.github.io/adk-docs/
+- **Sequential Agent Pattern**: github.com/google/adk-examples
+- **BigQuery Setup**: https://cloud.google.com/bigquery/docs
+- **ADK Python SDK**: github.com/google/adk-python
 
-**Solution**:
-- Check `SQLValidatorAgent` logs
-- Verify generated SQL is SELECT-only
-- Review `agents/sql_generator/prompts.py` for business logic
+## Architecture Diagram
 
-#### 3. Incorrect Business Logic
-
-**Error**: GenAI query not filtering on `managed_service = 'AI/ML'`
-
-**Solution**:
-```bash
-# Check SQL Generator prompt
-cat agents/sql_generator/prompts.py | grep "AI/ML"
-
-# Add/update business logic in prompts.py
-# Re-run agent
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  User Query: "What is total cost for FY26?"                     │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Root Agent (SequentialAgent)                                   │
+│  - Name: FinOpsCostAnalystOrchestrator                          │
+│  - Role: Orchestrates 4 sub-agents sequentially                 │
+│  - Tools: None (orchestration only)                             │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+         ┌──────────────────┼──────────────────┐
+         ▼                  ▼                  ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│ SQL Generation  │ │ SQL Validation  │ │ Query Execution │
+│ (LlmAgent)      │ │ (LlmAgent)      │ │ (LlmAgent)      │
+│                 │ │                 │ │                 │
+│ Input:          │ │ Input:          │ │ Input:          │
+│ - User query    │ │ - state['sql_   │ │ - state['sql_   │
+│ - Hardcoded     │ │   query']       │ │   query']       │
+│   schema        │ │                 │ │                 │
+│                 │ │ Tools:          │ │ Tools:          │
+│ Tools: None     │ │ - check_        │ │ - BigQueryTool  │
+│                 │ │   forbidden_    │ │   set.execute_  │
+│ Output:         │ │   keywords      │ │   sql           │
+│ state['sql_     │ │ - parse_sql_    │ │                 │
+│ query']         │ │   query         │ │ Output:         │
+│                 │ │ - validate_sql_ │ │ state['query_   │
+│ Example:        │ │   security      │ │ results']       │
+│ SELECT SUM(cost)│ │                 │ │                 │
+│ FROM table      │ │ Output:         │ │ Example:        │
+│ WHERE date      │ │ state['         │ │ total_cost      │
+│ BETWEEN ...     │ │ validation_     │ │ 27442275.64     │
+│                 │ │ result']        │ │                 │
+│                 │ │                 │ │                 │
+│                 │ │ Example:        │ │                 │
+│                 │ │ "VALID"         │ │                 │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────┐
+                  │ Insight         │
+                  │ Synthesis       │
+                  │ (LlmAgent)      │
+                  │                 │
+                  │ Input:          │
+                  │ - state['query_ │
+                  │   results']     │
+                  │ - state['sql_   │
+                  │   query']       │
+                  │                 │
+                  │ Tools: None     │
+                  │                 │
+                  │ Output:         │
+                  │ state['final_   │
+                  │ insights']      │
+                  │                 │
+                  │ Example:        │
+                  │ "The total cost │
+                  │ for FY26 was    │
+                  │ $27,442,275.64" │
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌────────────────────┐
+                  │  User Response     │
+                  └────────────────────┘
 ```
 
 ---
 
-## Best Practices
-
-### For Developers
-
-1. **Never Modify Schema**: The `cost_analysis` table is managed by FinOps team
-2. **Test Business Logic**: Always add eval tests for new business rules
-3. **Use Type Hints**: Maintain strong typing for better error detection
-4. **Log Everything**: Use structured logging for debugging
-5. **Version Control Prompts**: Treat `prompts.py` files as critical code
-
-### For FinOps Teams
-
-1. **Document Business Logic**: Update README when adding fiscal rules
-2. **Test Before Deploy**: Run full eval suite before production deployment
-3. **Monitor Query Costs**: BigQuery queries are billed to your project
-4. **Set Budget Alerts**: Configure BigQuery budget alerts
-5. **Regular Eval Updates**: Keep test cases in sync with business changes
-
-### For Security Teams
-
-1. **Review SQL Validator**: Audit `SQLValidatorAgent` regularly
-2. **MCP Server Isolation**: Run MCP Toolbox in separate service account
-3. **Audit Logs**: Enable BigQuery audit logging
-4. **VPC Service Controls**: Consider adding for production
-5. **Regular Penetration Testing**: Test for SQL injection vectors
-
----
-
-## Contributing
-
-### Development Workflow
-
-1. Fork repository
-2. Create feature branch: `git checkout -b feature/new-business-rule`
-3. Add eval tests for new functionality
-4. Update prompts in `agents/*/prompts.py`
-5. Run tests: `pytest eval/ -v`
-6. Submit PR with description of business logic changes
-
-### Code Style
-
-- **Black**: Code formatting (`black .`)
-- **isort**: Import sorting (`isort .`)
-- **mypy**: Type checking (`mypy agents/`)
-- **pylint**: Linting (`pylint agents/`)
-
----
-
-## License
-
-Apache License 2.0 - See [LICENSE](LICENSE) file
-
----
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/your-org/finops-cost-agent/issues)
-- **Slack**: `#finops-agent-support`
-- **FinOps Team**: finops@yourcompany.com
-- **ADK Documentation**: [Google ADK Docs](https://google.github.io/adk-docs/)
-
----
-
-## Changelog
-
-### v1.0.0 (2025-10-20)
-- ✅ Initial production release
-- ✅ Multi-agent architecture implementation
-- ✅ GenAI cost and FY26/FY25 business logic
-- ✅ MCP Toolbox integration
-- ✅ Comprehensive test suite
-- ✅ Vertex AI deployment support
-
----
-
-**Built with ❤️ by the FinOps Engineering Team**
+**Built with Google ADK** | Sequential Multi-Agent Workflow | Hardcoded Schema Pattern

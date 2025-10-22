@@ -1,0 +1,127 @@
+"""Root Agent - FinOps Cost Data Analyst with Sequential Multi-Agent Workflow.
+
+This is the enterprise-grade root agent following ADK best practices.
+Tools are organized in _tools/ package (underscore prefix hides from ADK discovery).
+
+Architecture:
+    Root Agent (SequentialAgent)
+        ↓ orchestrates
+    Sub-Agents (sql_generation, sql_validation, query_execution, insight_synthesis)
+        ↓ each sub-agent's output goes to next sub-agent via state
+    Real Tools (from _tools package)
+"""
+
+import logging
+import os
+
+from google.adk.agents import LlmAgent, SequentialAgent
+from google.genai import types
+
+from .prompts import (
+    ROOT_AGENT_DESCRIPTION,
+    get_sql_generation_prompt,
+    SQL_VALIDATION_PROMPT,
+    get_query_execution_prompt,
+    INSIGHT_SYNTHESIS_PROMPT,
+)
+
+# Import tools from _tools package
+from ._tools import (
+    check_forbidden_keywords,
+    parse_sql_query,
+    validate_sql_security,
+    bigquery_toolset,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# SUB-AGENT 1: SQL GENERATION
+# ============================================================================
+
+sql_generation_agent = LlmAgent(
+    model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.0-flash-exp"),
+    name="sql_generation",
+    instruction=get_sql_generation_prompt(),
+    output_key="sql_query",  # Stores generated SQL in state['sql_query']
+    # No tools - schema is hardcoded in prompt
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.01,  # Very low for deterministic SQL generation
+    ),
+)
+
+
+# ============================================================================
+# SUB-AGENT 2: SQL VALIDATION
+# ============================================================================
+
+sql_validation_agent = LlmAgent(
+    model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.0-flash-exp"),
+    name="sql_validation",
+    instruction=SQL_VALIDATION_PROMPT,
+    output_key="validation_result",  # Stores "VALID" or "INVALID: reason" in state
+    tools=[
+        check_forbidden_keywords,
+        parse_sql_query,
+        validate_sql_security,
+    ],  # type: ignore
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.0,  # Deterministic for security validation
+    ),
+)
+
+
+# ============================================================================
+# SUB-AGENT 3: QUERY EXECUTION
+# ============================================================================
+
+query_execution_agent = LlmAgent(
+    model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.0-flash-exp"),
+    name="query_execution",
+    instruction=get_query_execution_prompt(),
+    output_key="query_results",  # Stores BigQuery results in state['query_results']
+    tools=[bigquery_toolset],
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.0,  # Deterministic for query execution
+    ),
+)
+
+
+# ============================================================================
+# SUB-AGENT 4: INSIGHT SYNTHESIS
+# ============================================================================
+
+insight_synthesis_agent = LlmAgent(
+    model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.0-flash-exp"),
+    name="insight_synthesis",
+    instruction=INSIGHT_SYNTHESIS_PROMPT,
+    output_key="final_insights",  # Stores final formatted insights in state['final_insights']
+    # No tools needed - just formatting
+    generate_content_config=types.GenerateContentConfig(
+        temperature=0.1,  # Very low for data accuracy - no hallucinations
+    ),
+)
+
+
+# ============================================================================
+# ROOT AGENT - SequentialAgent orchestrating all sub-agents
+# ============================================================================
+
+# Create root agent with sequential workflow
+# Each sub-agent's output feeds into the next via shared state
+root_agent = SequentialAgent(
+    name="FinOpsCostAnalystOrchestrator",
+    description=ROOT_AGENT_DESCRIPTION,
+    sub_agents=[
+        sql_generation_agent,      # Outputs: state['sql_query']
+        sql_validation_agent,       # Uses: state['sql_query'], Outputs: state['validation_result']
+        query_execution_agent,      # Uses: state['sql_query'], Outputs: state['query_results']
+        insight_synthesis_agent,    # Uses: state['sql_query'] + state['query_results']
+    ]
+)
+
+logger.info("✓ Root Agent (SequentialAgent) initialized with 4 sub-agents")
+
+# Export for ADK
+__all__ = ["root_agent"]
