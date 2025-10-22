@@ -302,34 +302,73 @@ gcloud projects get-iam-policy gac-prod-471220 \
 
 ```bash
 # =============================================================================
-# UPDATE THESE VALUES
+# UPDATE THESE VALUES FOR YOUR ENVIRONMENT
 # =============================================================================
 
-# REQUIRED: Your GCP Project ID
+# REQUIRED: Google Gemini API Key (for agent LLM calls)
+GOOGLE_API_KEY=your-google-api-key-here
+
+# REQUIRED: Service Account for BigQuery Access
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/finops-agent-key.json
+
+# REQUIRED: GCP Project for general Google Cloud services
+GOOGLE_CLOUD_PROJECT=gac-prod-471220
+
+# REQUIRED: BigQuery Project ID (usually same as GOOGLE_CLOUD_PROJECT)
 BIGQUERY_PROJECT=gac-prod-471220
 
-# Path to service account key (UPDATE THIS PATH)
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/secure/location/finops-agent-key.json
+# OPTIONAL: GCP Region
+GOOGLE_CLOUD_LOCATION=us-central1
 
-# OPTIONAL: Model configuration (default is fine)
+# OPTIONAL: Fallback hints (if dynamic discovery fails)
+BIGQUERY_DATASET=agent_bq_dataset  # Fallback cost dataset
+BIGQUERY_TABLE=cost_analysis       # Fallback cost table
+
+# OPTIONAL: Model configuration
 ROOT_AGENT_MODEL=gemini-2.0-flash-exp
+SQL_GENERATOR_MODEL=gemini-2.0-flash-exp
+TEMPERATURE=0.01
+
+# OPTIONAL: Logging
+LOG_LEVEL=INFO
+
+# OPTIONAL: MCP Toolbox (if using)
+MCP_TOOLBOX_PATH=toolbox
 ```
 
-**Example .env file**:
+**Complete Example .env file**:
 ```bash
-# BigQuery Configuration
-BIGQUERY_PROJECT=gac-prod-471220
-GOOGLE_APPLICATION_CREDENTIALS=/Users/gurukallam/.gcp/finops-agent-key.json
+# Google GenAI API Configuration
+GOOGLE_API_KEY=AIzaSyB_your_actual_key_here
 
-# Fallback hints (optional)
-BIGQUERY_DATASET=cost_dataset
-BIGQUERY_TABLE=cost_analysis
+# Google Cloud Configuration (for BigQuery via service account)
+GOOGLE_APPLICATION_CREDENTIALS=/Users/yourname/.gcp/finops-agent-key.json
+GOOGLE_CLOUD_PROJECT=gac-prod-471220
+GOOGLE_CLOUD_LOCATION=us-central1
+
+# BigQuery Configuration (Multi-Table Discovery)
+BIGQUERY_PROJECT=gac-prod-471220          # Project where datasets exist
+BIGQUERY_DATASET=agent_bq_dataset          # Fallback cost dataset
+BIGQUERY_TABLE=cost_analysis               # Fallback cost table
 
 # Model Configuration
 ROOT_AGENT_MODEL=gemini-2.0-flash-exp
+SQL_GENERATOR_MODEL=gemini-2.0-flash-exp
 TEMPERATURE=0.01
+
+# Logging
 LOG_LEVEL=INFO
+
+# MCP Toolbox (if using)
+MCP_TOOLBOX_PATH=toolbox
 ```
+
+**Important Notes**:
+1. **GOOGLE_API_KEY**: Get from https://aistudio.google.com/app/apikey
+2. **GOOGLE_APPLICATION_CREDENTIALS**: Path to service account key (created in Step 4)
+3. **GOOGLE_CLOUD_PROJECT**: Your main GCP project ID
+4. **BIGQUERY_PROJECT**: Project where BigQuery datasets exist (usually same as GOOGLE_CLOUD_PROJECT)
+5. All paths should be absolute (full path from root)
 
 #### 5.2 Verify Configuration
 
