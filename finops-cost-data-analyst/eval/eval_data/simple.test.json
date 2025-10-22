@@ -1,0 +1,62 @@
+[
+  {
+    "query": "What data do you have access to?",
+    "expected_tool_use": [],
+    "expected_intermediate_agent_responses": [],
+    "reference": "I have access to a BigQuery table containing cloud cost data. The table tracks costs across different clouds (AWS, GCP, Azure), applications, managed services, with columns for date, cloud, application, managed_service, and cost."
+  },
+  {
+    "query": "What are the top 3 most expensive applications?",
+    "expected_tool_use": [
+      {
+        "tool_name": "call_sql_generation_agent",
+        "tool_input": {
+          "question": "What are the top 3 most expensive applications?"
+        }
+      },
+      {
+        "tool_name": "call_sql_validation_agent",
+        "tool_input": {
+          "sql": "SELECT application, SUM(cost) as total_cost FROM `project.dataset.cost_analysis` GROUP BY application ORDER BY total_cost DESC LIMIT 3"
+        }
+      },
+      {
+        "tool_name": "call_query_execution_agent",
+        "tool_input": {
+          "sql": "SELECT application, SUM(cost) as total_cost FROM `project.dataset.cost_analysis` GROUP BY application ORDER BY total_cost DESC LIMIT 3"
+        }
+      },
+      {
+        "tool_name": "call_insight_synthesis_agent",
+        "tool_input": {}
+      }
+    ],
+    "expected_intermediate_agent_responses": [],
+    "reference": "**Top 3 Most Expensive Applications:**\n\n1. Application A - $X,XXX.XX\n2. Application B - $X,XXX.XX\n3. Application C - $X,XXX.XX\n\n**Insights:** The sequential workflow successfully generated SQL, validated it for security, executed it on BigQuery, and synthesized the results into business insights."
+  },
+  {
+    "query": "Show me costs by cloud provider for the last month",
+    "expected_tool_use": [
+      {
+        "tool_name": "call_sql_generation_agent",
+        "tool_input": {
+          "question": "Show me costs by cloud provider for the last month"
+        }
+      },
+      {
+        "tool_name": "call_sql_validation_agent",
+        "tool_input": {}
+      },
+      {
+        "tool_name": "call_query_execution_agent",
+        "tool_input": {}
+      },
+      {
+        "tool_name": "call_insight_synthesis_agent",
+        "tool_input": {}
+      }
+    ],
+    "expected_intermediate_agent_responses": [],
+    "reference": "**Cloud Cost Breakdown:**\n\n- AWS: $XX,XXX.XX\n- GCP: $XX,XXX.XX  \n- Azure: $XX,XXX.XX\n\n**Analysis:** The multi-agent system successfully orchestrated the sequential workflow: SQL Generation → Validation → Execution → Insight Synthesis."
+  }
+]
