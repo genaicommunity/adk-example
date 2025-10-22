@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "tool_trajectory_avg_score": 1.0,
+    "response_match_score": 0.3
+  },
+  "description": "Evaluation configuration for main_agent multi-agent system",
+  "thresholds": {
+    "delegation_accuracy": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "multi_domain_handling": 0.8
+  }
+}
