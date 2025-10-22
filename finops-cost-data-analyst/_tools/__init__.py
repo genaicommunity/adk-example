@@ -15,6 +15,7 @@ from .bigquery_tools import (
     bigquery_schema_toolset,     # Schema discovery for SQL Generation Agent
     bigquery_execution_toolset,  # Query execution for Query Execution Agent
     bigquery_analytics_toolset,  # Advanced analytics (forecast, insights)
+    bigquery_full_toolset,       # Combined: schema discovery + AI analytics
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "bigquery_schema_toolset",    # Schema discovery
     "bigquery_execution_toolset", # Query execution
     "bigquery_analytics_toolset", # Advanced analytics
+    "bigquery_full_toolset",      # Schema discovery + AI analytics
 ]

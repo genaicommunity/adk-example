@@ -1,0 +1,46 @@
+{
+  "dataset_name": "FinOps Sample Queries",
+  "description": "Common FinOps queries for testing",
+  "eval_data": [
+    {
+      "user_query": "What is the total cost for February 2025?",
+      "expected_behavior": "Should query cost_dataset.cost_analysis with date filter for Feb 2025"
+    },
+    {
+      "user_query": "What are the top 5 most expensive applications?",
+      "expected_behavior": "Should aggregate costs by application, order DESC, LIMIT 5"
+    },
+    {
+      "user_query": "Compare budget vs actual costs for February 2025",
+      "expected_behavior": "Should JOIN cost_dataset and budget_dataset on application and date"
+    },
+    {
+      "user_query": "What is the average daily cost?",
+      "expected_behavior": "Should calculate AVG(cost) from cost_analysis table"
+    },
+    {
+      "user_query": "Show me GenAI costs for the last quarter",
+      "expected_behavior": "Should filter for AI/ML services with 3-month date range"
+    },
+    {
+      "user_query": "Which cloud provider costs the most?",
+      "expected_behavior": "Should GROUP BY cloud, aggregate costs, order DESC"
+    },
+    {
+      "user_query": "Find applications exceeding their budget",
+      "expected_behavior": "Should JOIN cost and budget tables, WHERE actual > budget"
+    },
+    {
+      "user_query": "What is our usage for compute resources in February?",
+      "expected_behavior": "Should query usage_dataset for compute resource_type"
+    },
+    {
+      "user_query": "Forecast costs for next 30 days",
+      "expected_behavior": "Should use ML.FORECAST() function for time series prediction"
+    },
+    {
+      "user_query": "Find cost anomalies in the last week",
+      "expected_behavior": "Should use ask_data_insights() or statistical anomaly detection SQL"
+    }
+  ]
+}

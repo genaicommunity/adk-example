@@ -62,6 +62,30 @@ bigquery_analytics_toolset = BigQueryToolset(
 )
 
 # =============================================================================
+# COMBINED TOOLSET (Schema Discovery + AI Analytics)
+# =============================================================================
+
+# Toolset combining schema discovery with AI analytics for advanced SQL Generation
+# This gives the SQL Generation Agent full capabilities:
+# - Multi-table discovery (list_dataset_ids, list_table_ids)
+# - Schema fetching (get_table_info, get_dataset_info)
+# - ML-based forecasting (forecast)
+# - Natural language insights (ask_data_insights)
+bigquery_full_toolset = BigQueryToolset(
+    tool_filter=[
+        # Schema Discovery Tools
+        "get_table_info",      # Get table metadata including schema
+        "get_dataset_info",    # Get dataset metadata
+        "list_table_ids",      # List all tables in dataset
+        "list_dataset_ids",    # List all datasets in project
+        # AI Analytics Tools
+        "forecast",            # BigQuery AI time series forecasting
+        "ask_data_insights",   # Natural language data insights
+    ],
+    bigquery_tool_config=bigquery_tool_config,
+)
+
+# =============================================================================
 # BACKWARD COMPATIBILITY
 # =============================================================================
 

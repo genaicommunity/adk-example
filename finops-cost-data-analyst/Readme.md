@@ -4,6 +4,7 @@ Enterprise-grade multi-agent AI system for cloud financial operations using Goog
 
 📖 **Quick Links**:
 - [MIGRATION.md](./MIGRATION.md) - ⭐ Step-by-step setup guide (start here tomorrow!)
+- [ANOMALY_DETECTION.md](./ANOMALY_DETECTION.md) - 🔥 ML-based anomaly detection guide (NEW!)
 - [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) - Enterprise deployment checklist
 - [CLAUDE.md](./CLAUDE.md) - Developer guide
 - [PRD_FinOps_Agent.md](./PRD_FinOps_Agent.md) - Product requirements

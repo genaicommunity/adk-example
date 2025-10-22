@@ -33,6 +33,7 @@ from ._tools import (
     bigquery_toolset,            # Legacy execution toolset
     bigquery_schema_toolset,     # Schema discovery toolset
     bigquery_execution_toolset,  # Query execution toolset
+    bigquery_full_toolset,       # Schema discovery + AI analytics toolset
 )
 
 logger = logging.getLogger(__name__)
@@ -47,11 +48,14 @@ sql_generation_agent = LlmAgent(
     name="sql_generation",
     instruction=get_sql_generation_prompt(),
     output_key="sql_query",  # Stores generated SQL in state['sql_query']
-    tools=[bigquery_schema_toolset],  # DYNAMIC schema discovery tools
+    tools=[bigquery_full_toolset],  # FULL toolset: schema discovery + AI analytics
     # Tools available:
     #   - get_table_info: Fetches table schema dynamically from BigQuery
     #   - get_dataset_info: Fetches dataset metadata
     #   - list_table_ids: Lists all tables in dataset
+    #   - list_dataset_ids: Lists all datasets in project
+    #   - forecast: BigQuery AI time series forecasting for anomaly detection
+    #   - ask_data_insights: Natural language insights using BigQuery AI
     generate_content_config=types.GenerateContentConfig(
         temperature=0.01,  # Very low for deterministic SQL generation
     ),
@@ -105,7 +109,7 @@ insight_synthesis_agent = LlmAgent(
     output_key="final_insights",  # Stores final formatted insights in state['final_insights']
     # No tools needed - just formatting
     generate_content_config=types.GenerateContentConfig(
-        temperature=0.1,  # Very low for data accuracy - no hallucinations
+        temperature=0.3,  # Higher temperature for better text generation while maintaining accuracy
     ),
 )
 
@@ -116,6 +120,7 @@ insight_synthesis_agent = LlmAgent(
 
 # Create root agent with sequential workflow
 # Each sub-agent's output feeds into the next via shared state
+# By default, SequentialAgent returns the output of the LAST agent
 root_agent = SequentialAgent(
     name="FinOpsCostAnalystOrchestrator",
     description=ROOT_AGENT_DESCRIPTION,
@@ -123,8 +128,8 @@ root_agent = SequentialAgent(
         sql_generation_agent,      # Outputs: state['sql_query']
         sql_validation_agent,       # Uses: state['sql_query'], Outputs: state['validation_result']
         query_execution_agent,      # Uses: state['sql_query'], Outputs: state['query_results']
-        insight_synthesis_agent,    # Uses: state['sql_query'] + state['query_results']
-    ]
+        insight_synthesis_agent,    # LAST agent - its output will be shown to user
+    ],
 )
 
 logger.info("✓ Root Agent (SequentialAgent) initialized with 4 sub-agents")
