@@ -50,14 +50,15 @@ sql_generation_agent = LlmAgent(
     output_key="sql_query",  # Stores generated SQL in state['sql_query']
     tools=[bigquery_full_toolset],  # FULL toolset: schema discovery + AI analytics
     # Tools available:
-    #   - get_table_info: Fetches table schema dynamically from BigQuery
+    #   - list_dataset_ids: Lists all datasets in project (CRITICAL for discovery)
+    #   - list_table_ids: Lists all tables in dataset (CRITICAL for discovery)
+    #   - get_table_info: Fetches table schema dynamically from BigQuery (CRITICAL)
     #   - get_dataset_info: Fetches dataset metadata
-    #   - list_table_ids: Lists all tables in dataset
-    #   - list_dataset_ids: Lists all datasets in project
+    #   - execute_sql: Executes SQL queries (available in full toolset)
     #   - forecast: BigQuery AI time series forecasting for anomaly detection
     #   - ask_data_insights: Natural language insights using BigQuery AI
     generate_content_config=types.GenerateContentConfig(
-        temperature=0.01,  # Very low for deterministic SQL generation
+        temperature=0.1,  # Slightly higher to encourage tool usage for schema discovery
     ),
 )
 
@@ -106,7 +107,7 @@ insight_synthesis_agent = LlmAgent(
     model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.0-flash-exp"),
     name="insight_synthesis",
     instruction=INSIGHT_SYNTHESIS_PROMPT,
-    # NO output_key - return text directly to user instead of writing to state
+    output_key="final_insights",  # CRITICAL: SequentialAgent returns this to user
     # No tools needed - just formatting
     generate_content_config=types.GenerateContentConfig(
         temperature=0.7,  # Balanced temperature for natural text generation without echoing

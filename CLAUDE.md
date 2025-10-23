@@ -91,93 +91,116 @@ PARTITION BY DATE(date)
 CLUSTER BY application, resource_type;
 ```
 
-## Architecture Flow
+## Architecture Patterns - Both Valid!
 
-### SequentialAgent Pattern (CORRECT - CURRENT IMPLEMENTATION)
+ADK supports **multiple valid architecture patterns**. Choose based on your needs:
+
+### Approach 1: Single LlmAgent (Simpler, Good for Most Cases)
+
+**When to use**: Straightforward workflows, fewer moving parts, easier debugging
+
+```python
+root_agent = LlmAgent(
+    name="FinOpsCostAnalyst",
+    instruction="Unified prompt with all workflow steps",
+    tools=[
+        bigquery_full_toolset,       # Schema discovery + execution
+        check_forbidden_keywords,     # Validation tools
+        parse_sql_query,
+        validate_sql_security,
+    ],
+    temperature=0.3,
+)
+```
+
+**Pros**:
+- ✅ Simpler codebase (one agent, one prompt)
+- ✅ Easier to debug (single conversation flow)
+- ✅ Direct tool access
+- ✅ Faster (no agent-to-agent overhead)
+
+**Cons**:
+- ❌ One large prompt (harder to maintain)
+- ❌ Less separation of concerns
+- ❌ Harder to optimize per-step (e.g., different temperatures)
+
+### Approach 2: SequentialAgent with Sub-Agents (CURRENT)
+
+**When to use**: Complex multi-step workflows, need separation of concerns, different temperatures per step
 
 ```
-agent.py (Root File - NOT in subfolder)
-  ├─ Root Agent: SequentialAgent
-  │   ├─ name: "FinOpsCostAnalystOrchestrator"
-  │   ├─ description: ROOT_AGENT_DESCRIPTION
-  │   └─ sub_agents: [...]  ← NOT tools!
+agent.py
+  ├─ Root: SequentialAgent
+  │   └─ sub_agents: [...]
   │
-  └─ Sub-Agents (all defined in agent.py, sequential execution):
-      1. sql_generation (LlmAgent) ⚡ DYNAMIC MULTI-TABLE DISCOVERY
-         - Tools: [bigquery_schema_toolset]
-           • list_dataset_ids (lists all datasets in project - NEW!)
-           • list_table_ids (lists all tables in dataset)
-           • get_table_info (fetches schema from BigQuery)
-           • get_dataset_info (dataset metadata)
-         - output_key: "sql_query"
-         - Workflow (5 Steps):
-           a) Classify query intent (COST/BUDGET/USAGE/COMPARISON)
-           b) Call list_dataset_ids() to discover all datasets
-           c) Match dataset to query type using pattern matching
-           d) Call list_table_ids() to discover tables in dataset
-           e) Call get_table_info() to get schema
-           f) Generate SQL using discovered schema
-         - Writes: state['sql_query']
+  └─ Sub-Agents (sequential execution via shared state):
+      1. sql_generation (LlmAgent)
+         - Tools: [bigquery_full_toolset]
+         - output_key: "sql_query" → state['sql_query']
+         - Temperature: 0.1 (deterministic SQL)
 
       2. sql_validation (LlmAgent)
          - Tools: [validation_tools]
-           • check_forbidden_keywords
-           • parse_sql_query
-           • validate_sql_security
-         - output_key: "validation_result"
          - Reads: state['sql_query']
-         - Writes: state['validation_result']
+         - output_key: "validation_result" → state['validation_result']
+         - Temperature: 0.0 (strict validation)
 
       3. query_execution (LlmAgent)
          - Tools: [bigquery_execution_toolset]
-           • execute_sql (read-only query execution)
-         - output_key: "query_results"
          - Reads: state['sql_query']
-         - Writes: state['query_results']
+         - output_key: "query_results" → state['query_results']
+         - Temperature: 0.0 (deterministic execution)
 
       4. insight_synthesis (LlmAgent)
-         - NO tools (formatting only)
-         - NO output_key (returns text directly to user)
-         - temperature: 0.7 (balanced for natural text generation)
-         - Reads: state['sql_query'], state['query_results']
-         - Returns: User-friendly text summary (NOT JSON)
+         - No tools (formatting only)
+         - Reads: state['query_results']
+         - output_key: "final_insights" → returned to user
+         - Temperature: 0.7 (creative formatting)
 ```
 
-### Anti-Pattern (WRONG - DO NOT USE)
+**Pros**:
+- ✅ Modular prompts (easier to maintain)
+- ✅ Separation of concerns (each agent has one job)
+- ✅ Different temperatures per step
+- ✅ Can skip/repeat steps if needed
+
+**Cons**:
+- ❌ More complex code
+- ❌ State management required
+- ❌ Prompts must explicitly reference state keys
+- ❌ Debugging requires checking all agents
+
+### Key Differences
+
+| Aspect | Single LlmAgent | SequentialAgent |
+|--------|----------------|-----------------|
+| **Complexity** | Simple | Complex |
+| **Prompts** | 1 large prompt | 4 focused prompts |
+| **State** | Not needed | Required (state['key']) |
+| **Temperatures** | One value | Different per agent |
+| **Debugging** | Easier | Harder |
+| **Modularity** | Lower | Higher |
+
+### Common Patterns (Both Approaches)
+
 ```python
-# ❌ WRONG: Root as LlmAgent with wrapper tools
-root_agent = LlmAgent(
-    tools=[call_sql_generation_agent, call_sql_validation_agent, ...]  # NO!
-)
-
-# ❌ WRONG: Absolute imports (breaks ADK package loading)
-from prompts import ROOT_AGENT_DESCRIPTION
-from _tools import bigquery_toolset
-
-# ❌ WRONG: Nested agents/ directory
-finops-cost-data-analyst/
-  └── agents/              # ❌ ADK won't find agent.py here
-      └── agent.py
-```
-
-### Correct Pattern (CURRENT)
-```python
-# ✅ CORRECT: Root as SequentialAgent
-root_agent = SequentialAgent(
-    name="FinOpsCostAnalystOrchestrator",
-    description=ROOT_AGENT_DESCRIPTION,
-    sub_agents=[...]  # List of LlmAgent instances
-)
-
-# ✅ CORRECT: Relative imports (works with ADK package loading)
+# ✅ CORRECT: Relative imports
 from .prompts import ROOT_AGENT_DESCRIPTION
 from ._tools import bigquery_toolset
 
 # ✅ CORRECT: Flat structure
 finops-cost-data-analyst/
-  ├── agent.py           # ✅ ADK looks here
+  ├── agent.py           # Root agent here
   ├── prompts.py
   └── _tools/
+
+# ❌ WRONG: Absolute imports (breaks ADK)
+from prompts import ROOT_AGENT_DESCRIPTION
+
+# ❌ WRONG: Nested agents/ directory
+finops-cost-data-analyst/
+  └── agents/              # ❌ ADK won't find this
+      └── agent.py
 ```
 
 ## Multi-Table Discovery Mechanism
