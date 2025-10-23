@@ -528,21 +528,29 @@ state = {
 ## File Structure (CURRENT - VERIFIED WORKING)
 
 ```
-finops-cost-data-analyst/              ← Run 'adk web' from PARENT directory
-├── __init__.py                        ← ⭐ REQUIRED: Exports root_agent for ADK discovery
-├── agent.py                           ← Root SequentialAgent + all sub-agents (ADK entry point)
-├── prompts.py                         ← All prompts (ROOT_AGENT_DESCRIPTION, etc.)
-├── _tools/                            ← Tools package (underscore prefix hides from ADK discovery)
-│   ├── __init__.py                    ← Exports all tools
-│   ├── validation_tools.py            ← check_forbidden_keywords, parse_sql_query, validate_sql_security
-│   └── bigquery_tools.py              ← bigquery_toolset (BigQueryToolset instance)
-├── eval/
-│   └── eval_data/
-│       └── simple.test.json           ← Eval test cases
-├── test_simple.py                     ← Structural validation test
-├── .env                               ← Environment config (gitignored)
-├── .env.example                       ← Example environment file
-└── Readme.md                          ← User documentation
+google-adk-agents/                     ← Run 'adk web' from THIS directory
+├── CLAUDE.md                          ← ⭐ Developer guide (this file)
+├── Readme.md                          ← ⭐ User documentation
+├── PRD_FinOps_Agent.md                ← Product requirements
+├── TECHNICAL_ARCHITECTURE.md          ← Complete technical documentation
+├── MIGRATION.md                       ← Setup guide
+├── ANOMALY_DETECTION.md               ← ML-based anomaly detection guide
+├── SUMMARY.md                         ← Project summary
+│
+└── finops-cost-data-analyst/          ← Agent package
+    ├── __init__.py                    ← ⭐ REQUIRED: Exports root_agent for ADK discovery
+    ├── agent.py                       ← Root SequentialAgent + all sub-agents (ADK entry point)
+    ├── prompts.py                     ← All prompts (ROOT_AGENT_DESCRIPTION, etc.)
+    ├── _tools/                        ← Tools package (underscore prefix hides from ADK discovery)
+    │   ├── __init__.py                ← Exports all tools
+    │   ├── validation_tools.py        ← check_forbidden_keywords, parse_sql_query, validate_sql_security
+    │   └── bigquery_tools.py          ← bigquery_toolset (BigQueryToolset instance)
+    ├── eval/
+    │   └── eval_data/
+    │       └── simple.test.json       ← Eval test cases
+    ├── test_simple.py                 ← Structural validation test
+    ├── .env                           ← Environment config (gitignored)
+    └── .env.example                   ← Example environment file
 ```
 
 **CRITICAL**:
