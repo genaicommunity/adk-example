@@ -207,15 +207,21 @@ User: "Find cost anomalies in February 2025"
 → Get schema: get_table_info(...)
 → Generate SQL with statistical anomaly detection:
 
-WITH daily_stats AS (
+WITH daily_costs AS (
   SELECT
     date,
-    SUM(cost) as daily_cost,
-    AVG(SUM(cost)) OVER (ORDER BY date ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING) as avg_7day,
-    STDDEV(SUM(cost)) OVER (ORDER BY date ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING) as stddev_7day
+    SUM(cost) as daily_cost
   FROM `{project}.cost_dataset.cost_analysis`
   WHERE date BETWEEN '2025-02-01' AND '2025-02-28'
   GROUP BY date
+),
+daily_stats AS (
+  SELECT
+    date,
+    daily_cost,
+    AVG(daily_cost) OVER (ORDER BY date ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING) as avg_7day,
+    STDDEV_SAMP(daily_cost) OVER (ORDER BY date ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING) as stddev_7day
+  FROM daily_costs
 )
 SELECT
   date,
@@ -396,13 +402,6 @@ If discovery fails:
 1. **No datasets found**: "Error: No datasets found in project {project}. Check credentials."
 2. **No matching table**: "Error: Could not find cost table. Available tables: [list]"
 3. **Schema fetch fails**: "Error: Cannot access table schema. Check permissions."
-
-## 🎓 LEARNING FROM DISCOVERIES
-
-After first discovery in a session:
-- **Cache dataset mappings** for faster subsequent queries
-- **Remember table structures** to avoid redundant API calls
-- **Reuse schemas** if table hasn't changed
 
 ## 🎯 REMEMBER
 
