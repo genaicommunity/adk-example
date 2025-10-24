@@ -107,6 +107,43 @@
 
 ## 🧩 Component Architecture
 
+### Code Organization & Modularity
+
+**Modular Architecture** (Current - October 2025)
+
+The agent codebase is organized into focused, single-purpose modules for maintainability and scalability:
+
+```
+finops-cost-data-analyst/
+├── __init__.py              # ADK discovery (exports root_agent)
+├── agent.py                 # Root SequentialAgent ONLY (52 lines)
+├── sub_agents.py            # All 4 sub-agents (124 lines)
+├── prompts.py               # Centralized prompts & business logic
+└── _tools/                  # Tools package
+    ├── __init__.py
+    ├── validation_tools.py  # SQL validation functions
+    └── bigquery_tools.py    # BigQuery toolsets
+```
+
+**Key Benefits**:
+- ✅ **Separation of Concerns**: Orchestration vs implementation
+- ✅ **Maintainability**: Each file has single, clear purpose
+- ✅ **Scalability**: Easy to add new sub-agents
+- ✅ **Testability**: Can test components independently
+- ✅ **Readability**: Small, focused modules vs monolithic files
+
+**File Responsibilities**:
+
+| File | Lines | Purpose | Contents |
+|------|-------|---------|----------|
+| `agent.py` | 52 | Orchestration | Root SequentialAgent definition only |
+| `sub_agents.py` | 124 | Implementation | All 4 LlmAgent sub-agents |
+| `prompts.py` | 547 | Business Logic | All prompts, FY definitions, schema instructions |
+| `_tools/bigquery_tools.py` | 95 | Data Access | BigQuery toolsets configuration |
+| `_tools/validation_tools.py` | 85 | Security | SQL validation & security checks |
+
+---
+
 ### Root Agent: FinOps Cost Analyst Orchestrator
 
 **Type**: `SequentialAgent`
@@ -143,8 +180,8 @@ root_agent = SequentialAgent(
 ### Sub-Agent 1: SQL Generation Agent
 
 **Type**: `LlmAgent`
-**File**: `agent.py`
-**Tools**: `bigquery_schema_toolset` (4 tools)
+**File**: `sub_agents.py:46-62`
+**Tools**: `bigquery_full_toolset` (schema discovery + AI analytics)
 **Purpose**: Convert natural language to BigQuery SQL with dynamic table selection
 
 #### Configuration
@@ -239,7 +276,7 @@ WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
 ### Sub-Agent 2: SQL Validation Agent
 
 **Type**: `LlmAgent`
-**File**: `agent.py`
+**File**: `sub_agents.py:70-83`
 **Tools**: `[check_forbidden_keywords, parse_sql_query, validate_sql_security]`
 **Purpose**: Validate SQL for security before execution
 
@@ -327,7 +364,7 @@ INVALID: Contains forbidden keyword DROP
 ### Sub-Agent 3: Query Execution Agent
 
 **Type**: `LlmAgent`
-**File**: `agent.py`
+**File**: `sub_agents.py:90-99`
 **Tools**: `bigquery_execution_toolset` (1 tool)
 **Purpose**: Execute validated SQL on BigQuery
 
@@ -389,7 +426,7 @@ ERROR: Table not found: gac-prod-471220.cost_dataset.cost_analysis
 ### Sub-Agent 4: Insight Synthesis Agent
 
 **Type**: `LlmAgent`
-**File**: `agent.py`
+**File**: `sub_agents.py:106-115`
 **Tools**: None (pure LLM)
 **Purpose**: Transform raw query results into business insights
 

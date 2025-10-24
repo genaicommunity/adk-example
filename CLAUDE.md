@@ -562,7 +562,8 @@ google-adk-agents/                     ← Run 'adk web' from THIS directory
 │
 └── finops-cost-data-analyst/          ← Agent package
     ├── __init__.py                    ← ⭐ REQUIRED: Exports root_agent for ADK discovery
-    ├── agent.py                       ← Root SequentialAgent + all sub-agents (ADK entry point)
+    ├── agent.py                       ← ⭐ Root SequentialAgent ONLY (orchestrator)
+    ├── sub_agents.py                  ← ⭐ All 4 sub-agents (clear separation of concerns)
     ├── prompts.py                     ← All prompts (ROOT_AGENT_DESCRIPTION, etc.)
     ├── _tools/                        ← Tools package (underscore prefix hides from ADK discovery)
     │   ├── __init__.py                ← Exports all tools
@@ -578,8 +579,9 @@ google-adk-agents/                     ← Run 'adk web' from THIS directory
 
 **CRITICAL**:
 - **MUST have `__init__.py`** that exports `root_agent` (ADK requirement for agent discovery)
-- Do NOT create nested `agents/` or `sub_agents/` directories
-- All code in `agent.py` at root level
+- **NEW**: Sub-agents are now in `sub_agents.py` for better organization (clear separation)
+- **agent.py**: Contains ONLY the root SequentialAgent (imports from sub_agents.py)
+- **sub_agents.py**: Contains all 4 LlmAgent definitions (sql_generation, sql_validation, query_execution, insight_synthesis)
 - Run `adk web` from **parent directory** (google-adk-agents/), NOT from agent folder
 
 ## Running ADK Web (IMPORTANT)
@@ -642,27 +644,51 @@ from _tools import bigquery_toolset          # ModuleNotFoundError!
 
 ## Adding New Sub-Agents
 
-### Template (Add to agent.py)
+### Template (Add to sub_agents.py)
 
 ```python
-# In agent.py (after existing sub-agents, before root_agent definition)
+# In sub_agents.py (after existing sub-agents)
 
 # ============================================================================
 # SUB-AGENT 5: NEW AGENT
 # ============================================================================
 
 new_agent = LlmAgent(
-    model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.0-flash-exp"),
+    model=MODEL,
     name="new_agent",
     instruction="Your instruction here...",
     output_key="new_agent_output",  # MANDATORY - writes to state['new_agent_output']
     tools=[...],  # Optional - attach tools if needed
-    generate_content_config=types.GenerateContentConfig(
+    generate_content_config=GenerateContentConfig(
         temperature=0.0,  # Adjust as needed
     ),
 )
 
-# Then update root_agent sub_agents list:
+logger.info("✓ New Agent initialized")
+
+# Then update __all__ export list:
+__all__ = [
+    "sql_generation_agent",
+    "sql_validation_agent",
+    "query_execution_agent",
+    "insight_synthesis_agent",
+    "new_agent",  # ← Add here
+]
+```
+
+Then update `agent.py` to import and use the new agent:
+
+```python
+# In agent.py - update imports
+from .sub_agents import (
+    sql_generation_agent,
+    sql_validation_agent,
+    query_execution_agent,
+    insight_synthesis_agent,
+    new_agent,  # ← Import new agent
+)
+
+# In agent.py - update root_agent
 root_agent = SequentialAgent(
     name="FinOpsCostAnalystOrchestrator",
     description=ROOT_AGENT_DESCRIPTION,
@@ -678,9 +704,11 @@ root_agent = SequentialAgent(
 
 ### Integration Steps
 1. Add prompt to `prompts.py`
-2. Add new sub-agent definition to `agent.py`
-3. Add to `root_agent.sub_agents` list
-4. If using new tools, add to `_tools/` package
+2. Add new sub-agent definition to `sub_agents.py`
+3. Update `__all__` export list in `sub_agents.py`
+4. Update imports in `agent.py`
+5. Add to `root_agent.sub_agents` list in `agent.py`
+6. If using new tools, add to `_tools/` package
 
 ## Testing Strategy
 
@@ -843,10 +871,12 @@ finops-cost-data-analyst/
 │   └── ...
 ```
 
-**NEW (agent.py flat) - CURRENT:**
+**NEW (Modular with sub_agents.py) - CURRENT:**
 ```
 finops-cost-data-analyst/
-├── agent.py                     # ✅ Root + all sub-agents in one file
+├── __init__.py                  # ✅ Exports root_agent for ADK
+├── agent.py                     # ✅ Root SequentialAgent ONLY (52 lines)
+├── sub_agents.py                # ✅ All 4 sub-agents (124 lines)
 ├── prompts.py                   # ✅ Centralized prompts
 └── _tools/                      # ✅ Tools package (underscore prefix)
     ├── __init__.py
@@ -854,10 +884,12 @@ finops-cost-data-analyst/
     └── bigquery_tools.py
 ```
 
-**Why Changed?**
+**Why This Structure?**
+- Clear separation: orchestration (agent.py) vs implementation (sub_agents.py)
 - Simpler imports (relative imports work cleanly)
 - Easier ADK discovery (no nested packages)
-- All agent definitions in one place
+- Modular: Easy to add new sub-agents
+- Better maintainability: Each file has single purpose
 - Tools properly isolated in `_tools/` package
 
 ## References

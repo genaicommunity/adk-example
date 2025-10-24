@@ -1,7 +1,16 @@
 """Simple test to verify the agent loads and works correctly."""
 
 import sys
-from agent import root_agent
+import importlib
+from pathlib import Path
+
+# Add parent directory to path so we can import the package
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+# Load agent module using importlib (handles dashes in package name)
+agent_module = importlib.import_module('finops-cost-data-analyst.agent')
+root_agent = agent_module.root_agent
 
 def test_agent_structure():
     """Test that the agent is properly structured."""

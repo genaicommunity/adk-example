@@ -13,14 +13,20 @@ Enterprise-grade multi-agent AI system for cloud financial operations using Goog
 ## Architecture Overview
 
 ```
-Root Agent (SequentialAgent) - "FinOpsCostAnalystOrchestrator"
+Root Agent (SequentialAgent) - "FinOpsCostAnalystOrchestrator" [agent.py]
     ↓ orchestrates via sub_agents=[]
-Sub-Agents (LlmAgent instances with tools + output_key)
+Sub-Agents (LlmAgent instances with tools + output_key) [sub_agents.py]
     ├─ sql_generation     → state['sql_query'] (tools: BigQuery Schema Discovery)
     ├─ sql_validation     → state['validation_result'] (tools: Security validation)
     ├─ query_execution    → state['query_results'] (tools: BigQuery Execution)
     └─ insight_synthesis  → state['final_insights'] (no tools)
 ```
+
+**Code Organization**:
+- `agent.py` - Root SequentialAgent only (52 lines) - orchestration
+- `sub_agents.py` - All 4 sub-agents (124 lines) - implementation
+- `prompts.py` - All prompts and business logic
+- `_tools/` - Validation and BigQuery tools
 
 ### Key Innovation: Dynamic Multi-Table Discovery ⚡
 
@@ -37,7 +43,7 @@ Unlike traditional SQL agents with hardcoded schemas, this agent **dynamically d
 
 ### Step-by-Step Flow (with Dynamic Multi-Table Discovery)
 
-1. **SQL Generation Agent** (agent.py:45-58)
+1. **SQL Generation Agent** (sub_agents.py:46-62)
    - **Step 1a: Classify Query** - Determines user intent: COST query
    - **Step 1b: Discover Datasets** - Calls `list_dataset_ids(project)`:
      ```python
@@ -72,7 +78,7 @@ Unlike traditional SQL agents with hardcoded schemas, this agent **dynamically d
      ```
    - **Step 1h**: Writes to `state['sql_query']`
 
-2. **SQL Validation Agent** (agent.py:65-77)
+2. **SQL Validation Agent** (sub_agents.py:70-83)
    - Reads `state['sql_query']`
    - Uses security validation tools (_tools/validation_tools.py):
      - `check_forbidden_keywords()` - Blocks DROP, DELETE, INSERT, etc.
@@ -80,7 +86,7 @@ Unlike traditional SQL agents with hardcoded schemas, this agent **dynamically d
      - `validate_sql_security()` - Comprehensive security check
    - Writes "VALID" to `state['validation_result']`
 
-3. **Query Execution Agent** (agent.py:85-94)
+3. **Query Execution Agent** (sub_agents.py:90-99)
    - Reads `state['sql_query']`
    - Uses BigQuery Execution Toolset (_tools/bigquery_tools.py)
    - Connects to BigQuery with credentials from .env
@@ -91,7 +97,7 @@ Unlike traditional SQL agents with hardcoded schemas, this agent **dynamically d
      27442275.64
      ```
 
-4. **Insight Synthesis Agent** (agent.py:101-110)
+4. **Insight Synthesis Agent** (sub_agents.py:106-115)
    - Reads `state['query_results']` and `state['sql_query']`
    - Formats into business-friendly output with exact numbers
    - Writes to `state['final_insights']`:
@@ -495,7 +501,9 @@ print(response.state['final_insights'])
 
 ```
 finops-cost-data-analyst/              ← Run 'adk web' from PARENT directory
-├── agent.py                           ← Root SequentialAgent + all sub-agents (ADK entry point)
+├── __init__.py                        ← Exports root_agent for ADK discovery
+├── agent.py                           ← Root SequentialAgent ONLY (52 lines)
+├── sub_agents.py                      ← All 4 sub-agents (124 lines)
 ├── prompts.py                         ← All prompts with DYNAMIC schema workflow
 ├── _tools/                            ← Tools package (underscore hides from ADK)
 │   ├── __init__.py                    ← Exports all toolsets
@@ -514,7 +522,10 @@ finops-cost-data-analyst/              ← Run 'adk web' from PARENT directory
 └── CLAUDE.md                          ← Developer guide
 ```
 
-**IMPORTANT**: ADK expects this flat structure. Don't nest `agent.py` in subdirectories.
+**IMPORTANT**:
+- Root agent in `agent.py` (orchestration only)
+- Sub-agents in `sub_agents.py` (implementation)
+- ADK expects this flat structure. Don't nest in subdirectories.
 
 ## Data Flow Details
 
@@ -522,10 +533,10 @@ finops-cost-data-analyst/              ← Run 'adk web' from PARENT directory
 
 ```python
 state = {
-    'sql_query': str,           # From sql_generation (agent.py:47)
-    'validation_result': str,    # From sql_validation (agent.py:62)
-    'query_results': dict,       # From query_execution (agent.py:82)
-    'final_insights': str        # From insight_synthesis (agent.py:98)
+    'sql_query': str,           # From sql_generation (sub_agents.py:46-62)
+    'validation_result': str,    # From sql_validation (sub_agents.py:70-83)
+    'query_results': dict,       # From query_execution (sub_agents.py:90-99)
+    'final_insights': str        # From insight_synthesis (sub_agents.py:106-115)
 }
 ```
 
@@ -622,11 +633,11 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID --flatten="bindings[].members" --
 
 ## Performance Tuning
 
-### Temperature Settings (agent.py)
-- SQL Generation: `0.01` (deterministic SQL)
+### Temperature Settings (sub_agents.py)
+- SQL Generation: `0.1` (encourages tool usage for schema discovery)
 - SQL Validation: `0.0` (strict security)
 - Query Execution: `0.0` (deterministic)
-- Insight Synthesis: `0.1` (slight creativity for formatting)
+- Insight Synthesis: `0.7` (natural text generation without echoing JSON)
 
 ### Model Selection
 - **Production**: `gemini-2.0-flash-exp` (fast, cost-effective)
