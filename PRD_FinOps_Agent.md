@@ -481,3 +481,114 @@ CREATE TABLE `gac-prod-471220.usage_dataset.resource_usage` (
 **Document Version History**:
 - v1.0 (Oct 15, 2025): Initial release - Single table support
 - v2.0 (Oct 21, 2025): Multi-table dynamic discovery
+- v2.1 (Oct 23, 2025): Added technical architecture, modular refactoring, edge case handling
+
+---
+
+## 🏗️ Technical Architecture
+
+### System Overview
+
+The agent uses a **Sequential Multi-Agent Architecture** with 4 specialized sub-agents:
+
+```
+User Query → Root Agent (Orchestrator)
+                ↓
+        [Shared State Dictionary]
+                ↓
+    ┌───────────┴────────────┐
+    ↓           ↓            ↓
+Agent 1:    Agent 2:     Agent 3:     Agent 4:
+SQL Gen  →  Validate  →  Execute  →  Synthesize
+(discover)  (security)   (BigQuery)  (insights)
+```
+
+### Code Organization
+
+```
+finops-cost-data-analyst/
+├── agent.py          - Root SequentialAgent (52 lines)
+├── sub_agents.py     - 4 specialized agents (124 lines)
+├── prompts.py        - Business logic (600 lines)
+└── _tools/
+    ├── validation_tools.py - SQL security
+    └── bigquery_tools.py   - Data access
+```
+
+**Design Principles**:
+- **Modularity**: Each agent has single responsibility
+- **State-Based Flow**: Explicit data passing via `output_key`
+- **Dynamic Discovery**: Runtime schema fetching (no hardcoding)
+- **Security First**: Read-only operations, SQL validation
+
+### Multi-Agent Workflow
+
+| Agent | Purpose | Tools | Output |
+|-------|---------|-------|--------|
+| **SQL Generation** | Convert NL to SQL | BigQuery schema discovery | `state['sql_query']` |
+| **SQL Validation** | Security checks | Forbidden keywords, parser | `state['validation_result']` |
+| **Query Execution** | Run on BigQuery | BigQuery execution | `state['query_results']` |
+| **Insight Synthesis** | Format results | None (pure LLM) | `state['final_insights']` |
+
+### Dynamic Schema Discovery
+
+**How It Works**:
+1. User asks: "Compare budget vs actual costs"
+2. Agent classifies intent: COMPARISON (needs 2 tables)
+3. Discovers datasets: `list_dataset_ids()` → ["cost_dataset", "budget_dataset", ...]
+4. Matches to intent: cost_dataset + budget_dataset
+5. Gets schemas: `get_table_info()` for both tables
+6. Generates JOIN query using discovered schema
+7. Executes and returns formatted results
+
+**Benefits**:
+- ✅ Works with any BigQuery project (portable)
+- ✅ Adapts to schema changes automatically
+- ✅ Discovers new tables without code changes
+- ✅ Generates multi-table JOINs intelligently
+
+### Security Architecture
+
+| Layer | Protection | Implementation |
+|-------|------------|----------------|
+| SQL Validation | Blocks dangerous keywords | DROP, DELETE, INSERT, UPDATE forbidden |
+| Read-Only Mode | No write operations | BigQuery WriteMode.BLOCKED |
+| Injection Prevention | SQL parsing | Validates syntax before execution |
+| Authentication | Secure access | Google Application Default Credentials |
+
+### Edge Case Handling
+
+The system handles common edge cases automatically:
+
+- **Random Sampling**: `TABLESAMPLE SYSTEM` for "show me 5 random rows"
+- **NULL Values**: `COALESCE(SUM(cost), 0)` prevents NULL returns
+- **Division by Zero**: `CASE WHEN` guards for cost-per-unit calculations
+- **Large Results**: Auto `LIMIT 10,000` to prevent crashes
+- **Empty Results**: User-friendly explanations
+- **Schema Errors**: Clear error messages with suggestions
+
+### Deployment
+
+**Runtime**: Python 3.11+, Google ADK
+**Model**: Gemini 2.0 Flash Exp (configurable)
+**Data**: BigQuery with dynamic discovery
+**Auth**: Google Application Default Credentials
+
+**Startup**: Single command - `adk web --port 8000`
+
+### Performance
+
+- **Query Response**: < 5 seconds (typical)
+- **Schema Discovery**: ~200-300ms per table
+- **Concurrent Users**: Supported by ADK web server
+- **Scalability**: Unlimited datasets/tables (dynamic)
+
+---
+
+## 📚 Related Documentation
+
+- **TECHNICAL_IMPLEMENTATION_EXECUTIVE_SUMMARY.md**: 2-page technical overview for executives
+- **Readme.md**: Comprehensive user and developer guide
+- **CLAUDE.md**: Detailed developer reference
+- **MIGRATION.md**: 5-minute setup guide
+- **ANOMALY_DETECTION.md**: ML-based anomaly detection feature guide
