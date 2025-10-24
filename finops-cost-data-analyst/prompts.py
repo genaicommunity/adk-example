@@ -31,12 +31,11 @@ Sequential Flow:
 Example queries you can ask:
 - "What is the total cost for February 2025?"
 - "What are the top 5 most expensive applications?"
-- "Compare budget vs actual costs for this month"
-- "Find applications exceeding their budget"
 - "Show me GenAI/ML costs for the last quarter"
 - "Which cloud provider costs the most?"
 - "Forecast costs for next 30 days"
 - "Find cost anomalies in the last week"
+- "What is the average daily cost?"
 
 Each agent's output flows to the next via shared state."""
 
@@ -69,12 +68,11 @@ Before schema discovery, determine the query type:
 - **COST_AGGREGATION**: "total cost", "average cost", "sum of costs"
 - **COST_BREAKDOWN**: "cost by application", "cost per cloud", "group by"
 - **COST_RANKING**: "top 10 applications", "most expensive", "bottom 5"
-- **COST_COMPARISON**: "budget vs actual", "compare costs", "variance"
 - **SAMPLE_DATA**: "show me examples", "random rows", "some costs", "2 random" ⚡
-- **BUDGET_QUERY**: "what is budget", "allocated budget"
-- **USAGE_QUERY**: "usage hours", "resource consumption"
 - **TREND_ANALYSIS**: "cost over time", "monthly trends", "daily costs"
 - **ANOMALY_DETECTION**: "anomalies", "unusual spending", "forecast", "predict", "ML", "insights" ⚡⚡
+
+**Note**: This agent handles COST data only. For budget or resource usage queries, use separate agents.
 
 **Time Period Detection**:
 - No time specified → FY26 YTD (default)
@@ -152,39 +150,7 @@ User: "What is total cost for entire fiscal year FY26?"
            WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
 ```
 
-### Budget Query Example (DEFAULT = FY26 YTD):
-```
-User: "What is our budget for FY26?"
-→ Classify: BUDGET query (no explicit time period = FY26 YTD default)
-→ Discover dataset: "budget_dataset"
-→ Discover table: "budget"
-→ Get schema: get_table_info(...)
-→ Generate: SELECT SUM(budget_amount) FROM `{project}.budget_dataset.budget`
-           WHERE date BETWEEN '2025-02-01' AND CURRENT_DATE()
-```
-
-### Usage Query Example (DEFAULT = FY26 YTD):
-```
-User: "How many compute hours did we use?"
-→ Classify: USAGE query (no explicit time period = FY26 YTD default)
-→ Discover dataset: "usage_dataset"
-→ Discover table: "resource_usage"
-→ Get schema: get_table_info(...)
-→ Generate: SELECT SUM(usage_hours) FROM `{project}.usage_dataset.resource_usage`
-           WHERE date BETWEEN '2025-02-01' AND CURRENT_DATE()
-```
-
-### Comparison Query Example (DEFAULT = FY26 YTD):
-```
-User: "Compare FY26 budget vs actual costs"
-→ Classify: COMPARISON (needs 2 tables, no explicit time = FY26 YTD default)
-→ Discover cost table: "agent_bq_dataset.cost_analysis"
-→ Discover budget table: "budget_dataset.budget"
-→ Get schemas for both
-→ Generate JOIN query with FY26 YTD date filter
-```
-
-### Sample Data Query Example (NEW - RANDOM SAMPLING):
+### Sample Data Query Example (RANDOM SAMPLING):
 ```
 User: "Show me 5 random costs"
 → Classify: SAMPLE_DATA (random sampling required)
@@ -301,19 +267,6 @@ This returns AI-generated insights about patterns, outliers, and correlations.
 The tool uses Gemini models to analyze the data.
 ```
 
-### Combined SQL + ML Example:
-
-```
-User: "Use ML to forecast costs and identify applications likely to exceed budget"
-→ Classify: ANOMALY_DETECTION + COST_COMPARISON (ML + multi-table)
-→ Approach:
-  1. Discover both cost_dataset and budget_dataset
-  2. Call forecast() to predict future costs per application
-  3. JOIN forecast results with budget allocations
-  4. Identify applications where predicted_cost > budget
-  5. Return ranked list with confidence intervals
-```
-
 ### ML Tool Usage Guidelines:
 
 1. **forecast() - Use When**:
@@ -411,7 +364,7 @@ WHERE managed_service = 'AI/ML'  -- or similar column
    - **Aggregations** (SUM, AVG): No LIMIT needed (single row result)
    - **Raw data** (SELECT *): LIMIT 100 (protect against 10K rows)
    - **Reasoning**: Users can't digest 50+ items. Always default to top results.
-6. **ORDER BY** cost/budget/usage DESC for ranking queries (CRITICAL)
+6. **ORDER BY** cost DESC for ranking queries (CRITICAL)
 7. **ONLY SELECT queries** (no INSERT, UPDATE, DELETE, DROP)
 8. **Handle NULLs gracefully** - Use COALESCE for aggregations:
    - `COALESCE(SUM(cost), 0)` instead of `SUM(cost)` (returns 0 if all NULL)
@@ -441,7 +394,7 @@ WHERE date BETWEEN '2025-02-01' AND '2026-01-31'
 
 If discovery fails:
 1. **No datasets found**: "Error: No datasets found in project {project}. Check credentials."
-2. **No matching table**: "Error: Could not find [cost/budget/usage] table. Available tables: [list]"
+2. **No matching table**: "Error: Could not find cost table. Available tables: [list]"
 3. **Schema fetch fails**: "Error: Cannot access table schema. Check permissions."
 
 ## 🎓 LEARNING FROM DISCOVERIES
@@ -450,30 +403,6 @@ After first discovery in a session:
 - **Cache dataset mappings** for faster subsequent queries
 - **Remember table structures** to avoid redundant API calls
 - **Reuse schemas** if table hasn't changed
-
-## 🚀 ADVANCED: MULTI-TABLE JOINS
-
-For comparison queries, generate JOINs with **FY26 YTD** as default:
-```sql
-SELECT
-  c.application,
-  SUM(c.cost) as actual_cost,
-  SUM(b.budget_amount) as budget,
-  SUM(c.cost) - SUM(b.budget_amount) as variance
-FROM `{project}.cost_dataset.cost_analysis` c
-LEFT JOIN `{project}.budget_dataset.budget` b
-  ON c.application = b.application
-  AND c.date = b.date
-WHERE c.date BETWEEN '2025-02-01' AND CURRENT_DATE()  -- FY26 YTD default
-GROUP BY c.application
-ORDER BY variance DESC
-LIMIT 10
-```
-
-For explicit full year requests:
-```sql
-WHERE c.date BETWEEN '2025-02-01' AND '2026-01-31'  -- Full FY26
-```
 
 ## 🎯 REMEMBER
 
