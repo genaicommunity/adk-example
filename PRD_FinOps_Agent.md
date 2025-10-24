@@ -335,11 +335,11 @@ CREATE TABLE `gac-prod-471220.usage_dataset.resource_usage` (
 - [x] JOIN query support
 - [x] Pattern matching
 
-### Phase 3: Planned (Q4 2025)
-- [ ] BigQuery AI integration (forecasting)
-- [ ] Natural language insights (ask_data_insights)
-- [ ] Anomaly detection
-- [ ] Cost optimization recommendations
+### Phase 3: ✅ Completed (Oct 2025)
+- [x] BigQuery AI integration (forecasting)
+- [x] Natural language insights (ask_data_insights)
+- [x] Anomaly detection (SQL-based + ML-based)
+- [x] Prompt-guided ML tool usage
 
 ### Phase 4: Future (2026)
 - [ ] Real-time alerts
@@ -482,6 +482,7 @@ CREATE TABLE `gac-prod-471220.usage_dataset.resource_usage` (
 - v1.0 (Oct 15, 2025): Initial release - Single table support
 - v2.0 (Oct 21, 2025): Multi-table dynamic discovery
 - v2.1 (Oct 23, 2025): Added technical architecture, modular refactoring, edge case handling
+- v2.2 (Oct 23, 2025): Integrated ML-based anomaly detection (forecast, ask_data_insights) with prompt guidance
 
 ---
 

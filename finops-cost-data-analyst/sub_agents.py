@@ -112,7 +112,8 @@ insight_synthesis_agent = LlmAgent(
     model=MODEL,
     name="insight_synthesis",
     instruction=INSIGHT_SYNTHESIS_PROMPT,
-    output_key="final_insights",  # CRITICAL: SequentialAgent returns this to user
+    # NO output_key - this is the LAST agent, it returns directly to user
+    # output_key would write to state, but there's no next agent to read it
     # No tools needed - just formatting
     generate_content_config=types.GenerateContentConfig(
         temperature=0.7,  # Balanced temperature for natural text generation without echoing

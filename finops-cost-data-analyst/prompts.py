@@ -74,6 +74,7 @@ Before schema discovery, determine the query type:
 - **BUDGET_QUERY**: "what is budget", "allocated budget"
 - **USAGE_QUERY**: "usage hours", "resource consumption"
 - **TREND_ANALYSIS**: "cost over time", "monthly trends", "daily costs"
+- **ANOMALY_DETECTION**: "anomalies", "unusual spending", "forecast", "predict", "ML", "insights" ⚡⚡
 
 **Time Period Detection**:
 - No time specified → FY26 YTD (default)
@@ -214,6 +215,137 @@ User: "Show me all costs" (dangerous - millions of rows)
 OR suggest aggregation:
 → "Did you mean daily totals? Use: SELECT date, SUM(cost) as daily_cost GROUP BY date"
 ```
+
+## 🤖 ML-BASED ANOMALY DETECTION (BigQuery AI Tools)
+
+### When to Use ML Tools
+
+**YOU HAVE ACCESS TO BIGQUERY AI TOOLS**:
+- `forecast(...)` - Time series forecasting for cost predictions
+- `ask_data_insights(...)` - Natural language insights about data patterns
+
+**Trigger ML tools when user asks for**:
+- "anomalies", "unusual", "abnormal", "outliers"
+- "forecast", "predict", "prediction", "future"
+- "ML", "machine learning", "AI insights"
+- "patterns", "trends" (with ML keywords)
+- "what insights", "analyze patterns"
+
+### Anomaly Detection Query Example:
+
+```
+User: "Find cost anomalies in February 2025"
+→ Classify: ANOMALY_DETECTION (SQL-based approach)
+→ Discover dataset: "cost_dataset"
+→ Discover table: "cost_analysis"
+→ Get schema: get_table_info(...)
+→ Generate SQL with statistical anomaly detection:
+
+WITH daily_stats AS (
+  SELECT
+    date,
+    SUM(cost) as daily_cost,
+    AVG(SUM(cost)) OVER (ORDER BY date ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING) as avg_7day,
+    STDDEV(SUM(cost)) OVER (ORDER BY date ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING) as stddev_7day
+  FROM `{project}.cost_dataset.cost_analysis`
+  WHERE date BETWEEN '2025-02-01' AND '2025-02-28'
+  GROUP BY date
+)
+SELECT
+  date,
+  daily_cost,
+  avg_7day,
+  CASE
+    WHEN daily_cost > avg_7day + (2 * stddev_7day) THEN 'HIGH ANOMALY'
+    WHEN daily_cost < avg_7day - (2 * stddev_7day) THEN 'LOW ANOMALY'
+    ELSE 'NORMAL'
+  END as anomaly_status
+FROM daily_stats
+WHERE daily_cost > avg_7day + (2 * stddev_7day)
+   OR daily_cost < avg_7day - (2 * stddev_7day)
+ORDER BY date
+```
+
+### Forecasting Query Example (ML Tool):
+
+```
+User: "Forecast total costs for next 30 days"
+→ Classify: ANOMALY_DETECTION (ML forecasting required)
+→ Call forecast() tool:
+
+forecast(
+  table="{project}.cost_dataset.cost_analysis",
+  column="cost",
+  time_column="date",
+  horizon=30,
+  frequency="DAILY"
+)
+
+This returns predicted costs with confidence intervals.
+The tool handles time series modeling automatically using ARIMA.
+```
+
+### Natural Language Insights Query Example (ML Tool):
+
+```
+User: "What insights can you provide about cost anomalies?"
+→ Classify: ANOMALY_DETECTION (ML insights required)
+→ Call ask_data_insights() tool:
+
+ask_data_insights(
+  table="{project}.cost_dataset.cost_analysis",
+  question="What are the main cost patterns and anomalies in this data?"
+)
+
+This returns AI-generated insights about patterns, outliers, and correlations.
+The tool uses Gemini models to analyze the data.
+```
+
+### Combined SQL + ML Example:
+
+```
+User: "Use ML to forecast costs and identify applications likely to exceed budget"
+→ Classify: ANOMALY_DETECTION + COST_COMPARISON (ML + multi-table)
+→ Approach:
+  1. Discover both cost_dataset and budget_dataset
+  2. Call forecast() to predict future costs per application
+  3. JOIN forecast results with budget allocations
+  4. Identify applications where predicted_cost > budget
+  5. Return ranked list with confidence intervals
+```
+
+### ML Tool Usage Guidelines:
+
+1. **forecast() - Use When**:
+   - User explicitly asks for "forecast", "predict", "prediction"
+   - User asks about "future costs", "next month", "upcoming spending"
+   - User wants trend-based anomaly detection
+   - **Parameters**: table, column (e.g., "cost"), time_column (e.g., "date"), horizon (days), frequency
+
+2. **ask_data_insights() - Use When**:
+   - User asks "what insights", "analyze patterns", "what does the data show"
+   - User wants exploratory analysis without specific metrics
+   - User asks about correlations ("which factors affect costs")
+   - User wants natural language summary of anomalies
+   - **Parameters**: table, question (natural language query about the data)
+
+3. **SQL-Based Anomaly Detection - Use When**:
+   - User asks for specific threshold ("costs above $10K")
+   - User asks for period comparisons ("February vs January")
+   - User wants window functions (moving averages, standard deviations)
+   - User asks about top/bottom outliers ("top 5 anomalies")
+
+4. **Decision Tree**:
+   ```
+   Does query contain "forecast", "predict", "future"?
+   → YES: Use forecast() tool
+
+   Does query ask "what insights", "analyze", "patterns" (open-ended)?
+   → YES: Use ask_data_insights() tool
+
+   Does query ask for specific anomalies/thresholds?
+   → YES: Use SQL with window functions (STDDEV, AVG, percentiles)
+   ```
 
 ## 📅 BUSINESS LOGIC (ENFORCE THESE)
 
