@@ -1,0 +1,404 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent-to-Agent Communication Specification",
+  "version": "1.0.0",
+  "description": "Standard A2A communication protocol for FinOps Cost Data Analyst",
+  "agentIdentifier": {
+    "name": "finops-cost-data-analyst",
+    "namespace": "finops",
+    "version": "1.0.0"
+  },
+  "protocol": {
+    "type": "REST",
+    "encoding": "JSON",
+    "authentication": {
+      "development": "none",
+      "production": "API-Key or OAuth2"
+    }
+  },
+  "templates": {
+    "basicQuery": {
+      "description": "Template for basic cost query",
+      "template": {
+        "appName": "finops-cost-data-analyst",
+        "userId": "{{CALLING_AGENT_ID}}",
+        "sessionId": "{{SESSION_ID}}",
+        "newMessage": {
+          "role": "user",
+          "parts": [
+            {
+              "text": "{{QUESTION}}"
+            }
+          ]
+        }
+      },
+      "variables": {
+        "CALLING_AGENT_ID": "Unique identifier of the agent making the request",
+        "SESSION_ID": "Unique session identifier (create new or reuse existing)",
+        "QUESTION": "Natural language question about cloud costs"
+      },
+      "example": {
+        "appName": "finops-cost-data-analyst",
+        "userId": "budget-analyzer-agent",
+        "sessionId": "budget-session-20251024-001",
+        "newMessage": {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What is the total cost for FY26?"
+            }
+          ]
+        }
+      }
+    },
+    "parameterizedQuery": {
+      "description": "Template for query with embedded parameters",
+      "template": {
+        "appName": "finops-cost-data-analyst",
+        "userId": "{{CALLING_AGENT_ID}}",
+        "sessionId": "{{SESSION_ID}}",
+        "newMessage": {
+          "role": "user",
+          "parts": [
+            {
+              "text": "{{QUERY_TEMPLATE}}"
+            }
+          ]
+        }
+      },
+      "queryTemplates": {
+        "totalCostByPeriod": "What is the total cost for {{PERIOD}}?",
+        "topNByDimension": "What are the top {{N}} {{DIMENSION}} by cost?",
+        "costBreakdown": "What is the cost breakdown by {{DIMENSION}}?",
+        "averageDailyCost": "What is the average daily cost for {{PERIOD}}?",
+        "anomalyDetection": "Find cost anomalies in {{PERIOD}}"
+      },
+      "example": {
+        "appName": "finops-cost-data-analyst",
+        "userId": "reporting-agent",
+        "sessionId": "report-20251024-001",
+        "newMessage": {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What are the top 10 applications by cost?"
+            }
+          ]
+        }
+      }
+    },
+    "multiTurnConversation": {
+      "description": "Template for multi-turn conversation with context",
+      "steps": [
+        {
+          "turn": 1,
+          "request": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "{{CALLING_AGENT_ID}}",
+            "sessionId": "{{SESSION_ID}}",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What are the top 5 applications by cost?"
+                }
+              ]
+            }
+          },
+          "response": "Returns top 5 applications with costs"
+        },
+        {
+          "turn": 2,
+          "request": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "{{CALLING_AGENT_ID}}",
+            "sessionId": "{{SAME_SESSION_ID}}",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What cloud providers are they using?"
+                }
+              ]
+            }
+          },
+          "response": "Uses context from turn 1 (knows 'they' = top 5 apps)"
+        }
+      ],
+      "note": "Use the SAME sessionId for all turns to maintain context"
+    },
+    "batchQueries": {
+      "description": "Template for multiple independent queries",
+      "approach": "parallel",
+      "requests": [
+        {
+          "id": "query1",
+          "payload": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "{{CALLING_AGENT_ID}}",
+            "sessionId": "{{SESSION_ID}}-query1",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the total cost for FY26?"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "query2",
+          "payload": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "{{CALLING_AGENT_ID}}",
+            "sessionId": "{{SESSION_ID}}-query2",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What are the top 10 applications by cost?"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "note": "Use different sessionIds for independent queries. Can be executed in parallel."
+    }
+  },
+  "useCases": {
+    "budgetAgent": {
+      "scenario": "Budget Agent queries actual costs to compare with budget allocations",
+      "workflow": [
+        {
+          "step": 1,
+          "action": "Query total cost",
+          "request": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "budget-agent",
+            "sessionId": "budget-variance-20251024",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the total cost for FY26?"
+                }
+              ]
+            }
+          },
+          "extract": "Parse total cost from response"
+        },
+        {
+          "step": 2,
+          "action": "Get budget from budget database",
+          "internal": true
+        },
+        {
+          "step": 3,
+          "action": "Calculate variance",
+          "formula": "variance = budget - actual_cost"
+        },
+        {
+          "step": 4,
+          "action": "Generate variance report",
+          "output": "Budget vs Actual report"
+        }
+      ]
+    },
+    "monitoringAgent": {
+      "scenario": "Monitoring Agent checks for cost anomalies daily",
+      "workflow": [
+        {
+          "step": 1,
+          "action": "Query for anomalies",
+          "request": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "monitoring-agent",
+            "sessionId": "daily-check-20251024",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Find cost anomalies in the last 7 days"
+                }
+              ]
+            }
+          },
+          "extract": "Parse anomalies list"
+        },
+        {
+          "step": 2,
+          "action": "If anomalies found, send alerts",
+          "alerting": "Slack, Email, PagerDuty"
+        }
+      ]
+    },
+    "dashboardService": {
+      "scenario": "Dashboard backend queries costs for real-time display",
+      "workflow": [
+        {
+          "step": 1,
+          "action": "Parallel queries for dashboard widgets",
+          "requests": [
+            {
+              "widget": "total_cost",
+              "query": "What is the total cost for FY26?"
+            },
+            {
+              "widget": "top_apps",
+              "query": "What are the top 10 applications by cost?"
+            },
+            {
+              "widget": "cloud_breakdown",
+              "query": "What is the cost breakdown by cloud provider?"
+            },
+            {
+              "widget": "daily_trend",
+              "query": "Show me daily costs for the last 30 days"
+            }
+          ]
+        },
+        {
+          "step": 2,
+          "action": "Parse responses and format for UI",
+          "output": "JSON data for dashboard widgets"
+        }
+      ]
+    },
+    "reportingAgent": {
+      "scenario": "Automated weekly cost reports",
+      "workflow": [
+        {
+          "step": 1,
+          "action": "Query weekly data",
+          "request": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "weekly-report-agent",
+            "sessionId": "weekly-report-20251024",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What is the total cost for the last 7 days?"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "step": 2,
+          "action": "Query top spenders",
+          "request": {
+            "appName": "finops-cost-data-analyst",
+            "userId": "weekly-report-agent",
+            "sessionId": "weekly-report-20251024",
+            "newMessage": {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "What are the top 10 applications by cost for the last 7 days?"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "step": 3,
+          "action": "Generate PDF report and email to stakeholders"
+        }
+      ]
+    }
+  },
+  "responseHandling": {
+    "extractAnswer": {
+      "description": "Extract text answer from response",
+      "code": "response.json()[0]['content']['parts'][0]['text']",
+      "example": {
+        "input": [
+          {
+            "type": "agent_output",
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "The total cost for FY26 YTD is $15,234,567.89"
+                }
+              ]
+            }
+          }
+        ],
+        "extracted": "The total cost for FY26 YTD is $15,234,567.89"
+      }
+    },
+    "parseStructuredData": {
+      "description": "Parse structured data from natural language response",
+      "patterns": {
+        "currency": "\\$([0-9,]+(?:\\.[0-9]{2})?)",
+        "percentage": "([0-9]+(?:\\.[0-9]+)?)%",
+        "listItems": "^\\d+\\.\\s+\\*\\*(.+?)\\*\\*\\s+-\\s+\\$([0-9,]+(?:\\.[0-9]{2})?)"
+      },
+      "example": {
+        "response": "Here are the top 3 applications:\n\n1. **app-a** - $100,000.00\n2. **app-b** - $90,000.00\n3. **app-c** - $80,000.00",
+        "parsed": [
+          {"rank": 1, "name": "app-a", "cost": 100000.00},
+          {"rank": 2, "name": "app-b", "cost": 90000.00},
+          {"rank": 3, "name": "app-c", "cost": 80000.00}
+        ]
+      }
+    },
+    "errorDetection": {
+      "description": "Detect errors in response",
+      "errorPatterns": [
+        "Error:",
+        "No data found",
+        "Cannot access",
+        "Permission denied",
+        "Timeout"
+      ],
+      "example": {
+        "errorResponse": [
+          {
+            "type": "agent_error",
+            "error": "Error: No datasets found in project gac-prod-471220"
+          }
+        ],
+        "handling": "Check error type and retry or escalate"
+      }
+    }
+  },
+  "integrationExamples": {
+    "python": {
+      "description": "Python integration example",
+      "code": "import requests\n\nclass FinOpsClient:\n    def __init__(self, base_url='http://localhost:8000'):\n        self.base_url = base_url\n        self.app_name = 'finops-cost-data-analyst'\n\n    def query(self, question, user_id, session_id):\n        payload = {\n            'appName': self.app_name,\n            'userId': user_id,\n            'sessionId': session_id,\n            'newMessage': {\n                'role': 'user',\n                'parts': [{'text': question}]\n            }\n        }\n        response = requests.post(f'{self.base_url}/run', json=payload)\n        return response.json()[0]['content']['parts'][0]['text']\n\n# Usage\nclient = FinOpsClient()\nanswer = client.query(\n    question='What is the total cost for FY26?',\n    user_id='budget-agent',\n    session_id='session-001'\n)\nprint(answer)"
+    },
+    "javascript": {
+      "description": "JavaScript/Node.js integration example",
+      "code": "const axios = require('axios');\n\nclass FinOpsClient {\n  constructor(baseUrl = 'http://localhost:8000') {\n    this.baseUrl = baseUrl;\n    this.appName = 'finops-cost-data-analyst';\n  }\n\n  async query(question, userId, sessionId) {\n    const payload = {\n      appName: this.appName,\n      userId: userId,\n      sessionId: sessionId,\n      newMessage: {\n        role: 'user',\n        parts: [{ text: question }]\n      }\n    };\n\n    const response = await axios.post(`${this.baseUrl}/run`, payload);\n    return response.data[0].content.parts[0].text;\n  }\n}\n\n// Usage\nconst client = new FinOpsClient();\nconst answer = await client.query(\n  'What is the total cost for FY26?',\n  'budget-agent',\n  'session-001'\n);\nconsole.log(answer);"
+    },
+    "curl": {
+      "description": "curl integration example",
+      "code": "#!/bin/bash\n\nBASE_URL=\"http://localhost:8000\"\nAPP_NAME=\"finops-cost-data-analyst\"\n\nquery_finops() {\n  local question=\"$1\"\n  local user_id=\"$2\"\n  local session_id=\"$3\"\n\n  curl -s -X POST \"$BASE_URL/run\" \\\n    -H \"Content-Type: application/json\" \\\n    -d \"{\n      \\\"appName\\\": \\\"$APP_NAME\\\",\n      \\\"userId\\\": \\\"$user_id\\\",\n      \\\"sessionId\\\": \\\"$session_id\\\",\n      \\\"newMessage\\\": {\n        \\\"role\\\": \\\"user\\\",\n        \\\"parts\\\": [{\\\"text\\\": \\\"$question\\\"}]\n      }\n    }\" | jq -r '.[].content.parts[0].text'\n}\n\n# Usage\nanswer=$(query_finops \"What is the total cost for FY26?\" \"budget-agent\" \"session-001\")\necho \"$answer\""
+    }
+  },
+  "versionControl": {
+    "currentVersion": "1.0.0",
+    "compatibility": {
+      "breaking": "Major version change (e.g., 1.x.x -> 2.x.x)",
+      "nonBreaking": "Minor/patch version change (e.g., 1.0.x -> 1.1.x)",
+      "deprecation": "Announced 90 days before removal"
+    },
+    "changelog": [
+      {
+        "version": "1.0.0",
+        "date": "2025-10-24",
+        "changes": [
+          "Initial A2A specification release",
+          "Support for 6 intent types",
+          "Natural language query interface",
+          "Dynamic BigQuery schema discovery"
+        ]
+      }
+    ]
+  }
+}

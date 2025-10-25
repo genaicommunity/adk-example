@@ -1,0 +1,452 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "agentCard": {
+    "version": "1.0.0",
+    "metadata": {
+      "name": "finops-cost-data-analyst",
+      "displayName": "FinOps Cost Data Analyst",
+      "description": "Analyzes cloud cost data from BigQuery using dynamic schema discovery and multi-agent workflow. Provides cost breakdowns, trends, anomaly detection, and forecasting for FinOps teams.",
+      "version": "1.0.0",
+      "author": "FinOps Team",
+      "created": "2025-10-24",
+      "updated": "2025-10-24",
+      "tags": [
+        "finops",
+        "cost-analysis",
+        "cloud-costs",
+        "bigquery",
+        "analytics",
+        "forecasting"
+      ],
+      "category": "finance",
+      "license": "Internal Use Only"
+    },
+    "endpoints": {
+      "baseUrl": "http://localhost:8000",
+      "apiVersion": "v1",
+      "communication": {
+        "protocol": "REST",
+        "format": "JSON",
+        "methods": {
+          "synchronous": {
+            "endpoint": "/run",
+            "method": "POST",
+            "description": "Synchronous query - returns complete response"
+          },
+          "streaming": {
+            "endpoint": "/run_sse",
+            "method": "POST",
+            "description": "Streaming query - returns Server-Sent Events (SSE)"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "primary": [
+        "cost-aggregation",
+        "cost-breakdown",
+        "cost-ranking",
+        "trend-analysis",
+        "anomaly-detection",
+        "forecasting"
+      ],
+      "dataAccess": {
+        "source": "BigQuery",
+        "datasets": ["cost_dataset", "agent_bq_dataset"],
+        "tables": ["cost_analysis"],
+        "discovery": "dynamic",
+        "permissions": ["bigquery.datasets.get", "bigquery.tables.list", "bigquery.jobs.create"]
+      },
+      "timePeriods": {
+        "fiscalYears": {
+          "FY26": {
+            "start": "2025-02-01",
+            "end": "2026-01-31",
+            "current": true
+          },
+          "FY25": {
+            "start": "2024-02-01",
+            "end": "2025-01-31",
+            "current": false
+          }
+        },
+        "defaultPeriod": "FY26 YTD",
+        "defaultPeriodDescription": "FY26 Year-to-Date (Feb 1, 2025 to current date)"
+      },
+      "outputFormats": [
+        "natural-language-summary",
+        "structured-data",
+        "sql-query"
+      ]
+    },
+    "intents": {
+      "COST_AGGREGATION": {
+        "description": "Calculate total, average, or sum of costs",
+        "examples": [
+          "What is the total cost for FY26?",
+          "What is the average daily cost?",
+          "Sum of all costs for February 2025"
+        ],
+        "parameters": {
+          "timePeriod": "optional",
+          "filters": "optional"
+        },
+        "outputType": "single-value"
+      },
+      "COST_BREAKDOWN": {
+        "description": "Break down costs by dimensions (application, cloud, service, etc.)",
+        "examples": [
+          "What is the cost breakdown by cloud provider?",
+          "Show me costs grouped by application",
+          "Break down costs by environment"
+        ],
+        "parameters": {
+          "dimension": "required",
+          "timePeriod": "optional",
+          "limit": "optional"
+        },
+        "outputType": "multi-row"
+      },
+      "COST_RANKING": {
+        "description": "Rank resources by cost (top/bottom N)",
+        "examples": [
+          "What are the top 10 applications by cost?",
+          "Show me the 5 most expensive cloud services",
+          "Which applications cost the least?"
+        ],
+        "parameters": {
+          "dimension": "required",
+          "limit": "required",
+          "order": "DESC or ASC",
+          "timePeriod": "optional"
+        },
+        "outputType": "ranked-list"
+      },
+      "TREND_ANALYSIS": {
+        "description": "Analyze cost trends over time",
+        "examples": [
+          "Show me cost trends for the last 30 days",
+          "What is the monthly cost trend?",
+          "How have costs changed over time?"
+        ],
+        "parameters": {
+          "timePeriod": "required",
+          "granularity": "daily|weekly|monthly"
+        },
+        "outputType": "time-series"
+      },
+      "ANOMALY_DETECTION": {
+        "description": "Detect unusual spending patterns or cost anomalies",
+        "examples": [
+          "Find cost anomalies in February 2025",
+          "Are there any unusual spending patterns?",
+          "Detect outliers in daily costs"
+        ],
+        "parameters": {
+          "timePeriod": "required",
+          "threshold": "optional (default: 2 sigma)"
+        },
+        "outputType": "anomaly-list"
+      },
+      "SAMPLE_DATA": {
+        "description": "Retrieve sample cost data for inspection",
+        "examples": [
+          "Show me 5 random cost records",
+          "Give me some example costs",
+          "Show me 10 sample rows"
+        ],
+        "parameters": {
+          "limit": "required",
+          "timePeriod": "optional"
+        },
+        "outputType": "sample-rows"
+      }
+    },
+    "requestSchema": {
+      "type": "object",
+      "required": ["appName", "userId", "sessionId", "newMessage"],
+      "properties": {
+        "appName": {
+          "type": "string",
+          "const": "finops-cost-data-analyst",
+          "description": "Agent identifier (must be exact)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Unique identifier for calling agent or user",
+          "examples": ["budget-agent", "user-123", "monitoring-system"]
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID for conversation context (use same session for multi-turn)",
+          "examples": ["session-abc123", "budget-session-20251024"]
+        },
+        "newMessage": {
+          "type": "object",
+          "required": ["role", "parts"],
+          "properties": {
+            "role": {
+              "type": "string",
+              "const": "user",
+              "description": "Message role (always 'user' for queries)"
+            },
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["text"],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Natural language question about cloud costs",
+                    "examples": [
+                      "What is the total cost for FY26?",
+                      "What are the top 5 applications by cost?"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "streaming": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable streaming responses (SSE)"
+        }
+      }
+    },
+    "responseSchema": {
+      "type": "array",
+      "description": "Array of events from agent execution",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "agent_start",
+              "agent_output",
+              "tool_call",
+              "tool_result",
+              "agent_error"
+            ]
+          },
+          "content": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "const": "model"
+              },
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "Agent's response in natural language"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "session_id": {"type": "string"},
+              "event_id": {"type": "string"},
+              "timestamp": {"type": "string", "format": "date-time"}
+            }
+          }
+        }
+      }
+    },
+    "examples": {
+      "totalCost": {
+        "intent": "COST_AGGREGATION",
+        "description": "Get total cost for current fiscal year",
+        "request": {
+          "appName": "finops-cost-data-analyst",
+          "userId": "budget-agent",
+          "sessionId": "session-001",
+          "newMessage": {
+            "role": "user",
+            "parts": [{"text": "What is the total cost for FY26?"}]
+          }
+        },
+        "expectedResponse": {
+          "type": "agent_output",
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "The total cost for FY26 YTD (February 1, 2025 to today) is $15,234,567.89.\n\nThis represents cloud spending across all providers and applications for the current fiscal year to date."
+              }
+            ]
+          }
+        }
+      },
+      "topApplications": {
+        "intent": "COST_RANKING",
+        "description": "Get top 5 applications by cost",
+        "request": {
+          "appName": "finops-cost-data-analyst",
+          "userId": "dashboard-service",
+          "sessionId": "session-002",
+          "newMessage": {
+            "role": "user",
+            "parts": [{"text": "What are the top 5 applications by cost?"}]
+          }
+        },
+        "expectedResponse": {
+          "type": "agent_output",
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Here are the top 5 applications by cost for FY26 YTD:\n\n1. **compliance-checker** - $663,823.77\n2. **failover-service** - $661,239.48\n3. **vulnerability-service** - $645,538.87\n4. **reconciliation-tool** - $613,338.50\n5. **alerting-service** - $559,894.22\n\n**Total for top 5**: $3,144,734.84"
+              }
+            ]
+          }
+        }
+      },
+      "cloudBreakdown": {
+        "intent": "COST_BREAKDOWN",
+        "description": "Break down costs by cloud provider",
+        "request": {
+          "appName": "finops-cost-data-analyst",
+          "userId": "reporting-system",
+          "sessionId": "session-003",
+          "newMessage": {
+            "role": "user",
+            "parts": [{"text": "What is the cost breakdown by cloud provider?"}]
+          }
+        },
+        "expectedResponse": {
+          "type": "agent_output",
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Here is the cost breakdown by cloud provider for FY26 YTD:\n\n1. **Azure** - $8,234,567.89 (54%)\n2. **GCP** - $5,123,456.78 (34%)\n3. **AWS** - $1,876,543.22 (12%)\n\n**Total**: $15,234,567.89"
+              }
+            ]
+          }
+        }
+      },
+      "anomalyDetection": {
+        "intent": "ANOMALY_DETECTION",
+        "description": "Detect cost anomalies in a time period",
+        "request": {
+          "appName": "finops-cost-data-analyst",
+          "userId": "monitoring-agent",
+          "sessionId": "session-004",
+          "newMessage": {
+            "role": "user",
+            "parts": [{"text": "Find cost anomalies in February 2025"}]
+          }
+        },
+        "expectedResponse": {
+          "type": "agent_output",
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "Found 3 cost anomalies in February 2025:\n\n1. **Feb 15, 2025** - High Anomaly\n   - Daily cost: $125,432.87\n   - 7-day average: $54,231.45\n   - Deviation: +131% (2.3σ above normal)\n\n2. **Feb 22, 2025** - High Anomaly\n   - Daily cost: $98,765.43\n   - 7-day average: $52,123.12\n   - Deviation: +89% (2.1σ above normal)\n\n3. **Feb 28, 2025** - Low Anomaly\n   - Daily cost: $12,345.67\n   - 7-day average: $55,678.90\n   - Deviation: -78% (2.4σ below normal)"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "errorCodes": {
+      "AGENT_NOT_FOUND": {
+        "code": 404,
+        "description": "Agent 'finops-cost-data-analyst' not found on server"
+      },
+      "INVALID_REQUEST": {
+        "code": 422,
+        "description": "Request body validation failed (missing required fields)"
+      },
+      "BIGQUERY_ERROR": {
+        "code": 500,
+        "description": "BigQuery error (credentials, permissions, or query error)"
+      },
+      "NO_DATA_FOUND": {
+        "code": 200,
+        "description": "Query successful but no data matched filters"
+      },
+      "TIMEOUT": {
+        "code": 504,
+        "description": "Request timeout (default: 120s)"
+      }
+    },
+    "bestPractices": {
+      "sessionManagement": {
+        "description": "Use unique session IDs for different conversations",
+        "recommendation": "Create new session per user query topic. Reuse session for follow-up questions."
+      },
+      "queryFormat": {
+        "description": "Use natural language questions",
+        "recommendation": "Ask questions as you would to a human analyst. Agent handles SQL generation automatically."
+      },
+      "timePeriods": {
+        "description": "Specify time periods explicitly when needed",
+        "recommendation": "Default is FY26 YTD. For other periods, mention explicitly: 'entire FY26', 'FY25', 'February 2025', etc."
+      },
+      "errorHandling": {
+        "description": "Handle errors gracefully with retries",
+        "recommendation": "Implement exponential backoff for transient errors. Log all errors for debugging."
+      },
+      "rateLimit": {
+        "description": "Respect rate limits in production",
+        "recommendation": "Production: 100 requests/minute per user. Development: no limit."
+      }
+    },
+    "dependencies": {
+      "runtime": {
+        "python": ">=3.11",
+        "framework": "google-adk"
+      },
+      "services": {
+        "bigquery": {
+          "required": true,
+          "permissions": [
+            "bigquery.datasets.get",
+            "bigquery.tables.list",
+            "bigquery.tables.get",
+            "bigquery.jobs.create"
+          ]
+        },
+        "genai": {
+          "required": true,
+          "model": "gemini-2.0-flash-exp"
+        }
+      },
+      "environment": {
+        "BIGQUERY_PROJECT": "GCP project ID for BigQuery data",
+        "GOOGLE_APPLICATION_CREDENTIALS": "Path to service account key JSON",
+        "ROOT_AGENT_MODEL": "Gemini model name (default: gemini-2.0-flash-exp)"
+      }
+    },
+    "sla": {
+      "availability": "99.9%",
+      "responseTime": {
+        "p50": "2s",
+        "p95": "10s",
+        "p99": "30s"
+      },
+      "timeout": "120s",
+      "maxConcurrentRequests": "100"
+    },
+    "contact": {
+      "team": "FinOps Team",
+      "documentation": "https://github.com/company/finops-agent/docs",
+      "support": "finops-team@company.com",
+      "slack": "#finops-support"
+    }
+  }
+}
