@@ -1,0 +1,101 @@
+═══════════════════════════════════════════════════════════════
+  FILES FOR UI PROJECT INTEGRATION
+═══════════════════════════════════════════════════════════════
+
+🎯 ESSENTIAL FILES (Copy these 3):
+───────────────────────────────────────────────────────────────
+
+1. agent-card.json ⭐⭐⭐ (MOST IMPORTANT - API CONTRACT)
+
+   /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/agent-card.json
+
+   Size: 15 KB
+   Contains:
+   - All capabilities
+   - Request/response schemas
+   - Example queries
+   - Intent definitions
+
+
+2. UI_INTEGRATION_GUIDE.md 🆕 (TypeScript/React Guide)
+
+   /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/UI_INTEGRATION_GUIDE.md
+
+   Size: 11 KB
+   Contains:
+   - TypeScript code examples
+   - React component examples
+   - Complete integration walkthrough
+   - Error handling
+
+
+3. docs/API_GUIDE.md (API Reference)
+
+   /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/docs/API_GUIDE.md
+
+   Size: 18 KB
+   Contains:
+   - REST API documentation
+   - Authentication guide
+   - Error codes
+   - curl examples
+
+───────────────────────────────────────────────────────────────
+
+📚 OPTIONAL FILES (For advanced features):
+───────────────────────────────────────────────────────────────
+
+4. a2a-spec.json (Advanced Patterns)
+
+   /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/a2a-spec.json
+
+   Size: 14 KB
+   Contains:
+   - Request templates
+   - Response parsing patterns
+   - Use case examples
+
+
+5. docs/A2A_QUICKSTART.md (Quick Start)
+
+   /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/docs/A2A_QUICKSTART.md
+
+   Size: 9.4 KB
+   Contains:
+   - 3-step integration
+   - Security checklist
+
+───────────────────────────────────────────────────────────────
+
+📋 COPY COMMANDS FOR YOUR UI PROJECT:
+───────────────────────────────────────────────────────────────
+
+# Navigate to your UI project first
+cd /path/to/your-ui-project
+
+# Copy agent card (API contract)
+cp /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/agent-card.json ./public/
+
+# Copy integration guide
+cp /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/UI_INTEGRATION_GUIDE.md ./docs/
+
+# Copy API reference
+cp /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/docs/API_GUIDE.md ./docs/
+
+# Optional: Copy a2a-spec
+cp /Users/gurukallam/projects/google-adk-agents/finops-cost-data-analyst/a2a-spec.json ./public/
+
+───────────────────────────────────────────────────────────────
+
+🚀 QUICK START FOR UI DEVELOPERS:
+───────────────────────────────────────────────────────────────
+
+1. Read UI_INTEGRATION_GUIDE.md first
+2. Load agent-card.json in your UI code
+3. Use the TypeScript examples from the guide
+4. Reference API_GUIDE.md for details
+
+───────────────────────────────────────────────────────────────
+
+✅ All files verified and ready to copy!
+Last updated: 2025-10-24

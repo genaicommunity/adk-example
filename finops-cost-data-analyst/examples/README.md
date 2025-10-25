@@ -8,13 +8,12 @@ This directory contains examples demonstrating how to use **agent-card.json** an
 
 | File | Purpose | Uses Spec? |
 |------|---------|------------|
-| `api_client_spec.py` | ✅ **Spec-driven Python client** | ✅ Yes - Recommended |
-| `api_test_spec.sh` | ✅ **Spec-driven shell tests** | ✅ Yes - Recommended |
-| `spec_utils.py` | ✅ **Spec browsing utility** | ✅ Yes |
-| `api_client.py` | Basic Python client | ❌ No (hardcoded) |
-| `api_test.sh` | Basic shell tests | ❌ No (hardcoded) |
+| `api_client_spec.py` | **Spec-driven Python client** | ✅ Yes |
+| `api_test_spec.sh` | **Spec-driven shell tests** | ✅ Yes |
+| `quick_test.sh` | **Simple working example** | ❌ No (minimal test) |
+| `spec_utils.py` | **Spec browsing utility** | ✅ Yes |
 
-**Recommendation**: Use the `*_spec.*` versions - they read from JSON specs and are more maintainable!
+All clients are **spec-driven** and use agent-card.json and a2a-spec.json as the single source of truth.
 
 ---
 
@@ -296,38 +295,25 @@ print(json.dumps(template, indent=2))
 
 ---
 
-## Comparison: Basic vs Spec-Driven
+## Quick Test Script (quick_test.sh)
 
-### Basic Clients (api_client.py, api_test.sh)
+### Purpose
 
-**Pros:**
-- ✅ Simple and straightforward
-- ✅ No dependencies
+Simple shell script demonstrating the **correct workflow** for session creation and querying.
 
-**Cons:**
-- ❌ Hardcoded agent name
-- ❌ No capability discovery
-- ❌ No request validation
-- ❌ Manual request building
-- ❌ Hardcoded examples
+### Usage
 
-**Use when:** Quick testing, simple integration
+```bash
+./examples/quick_test.sh
+```
 
-### Spec-Driven Clients (api_client_spec.py, api_test_spec.sh)
+### What It Does
 
-**Pros:**
-- ✅ Reads from spec files (single source of truth)
-- ✅ Automatic capability discovery
-- ✅ Request validation against schema
-- ✅ Uses templates from spec
-- ✅ Examples from spec
-- ✅ Easier to maintain
+1. **Creates session** via POST `/apps/{app}/users/{user}/sessions`
+2. **Queries agent** via POST `/run` with the session ID
+3. **Shows the correct flow** for session management
 
-**Cons:**
-- ❌ Requires jsonschema library (optional)
-- ❌ Slightly more complex
-
-**Use when:** Production integration, A2A communication, maintainable code
+This is the **minimal working example** if you need to understand the basic flow without spec dependencies.
 
 ---
 
@@ -547,16 +533,19 @@ response = requests.post(url, json=request)
 
 ## Summary
 
-| Feature | Basic Client | Spec-Driven Client |
-|---------|-------------|-------------------|
-| Loads specs | ❌ | ✅ |
-| Capability discovery | ❌ | ✅ |
-| Request validation | ❌ | ✅ |
-| Uses templates | ❌ | ✅ |
-| Response parsing | ✅ | ✅ |
-| Maintainability | ⚠️ Low | ✅ High |
+### Features
 
-**Recommendation**: Use spec-driven clients for all production integrations!
+| Feature | Spec-Driven Clients |
+|---------|-------------------|
+| Loads specs | ✅ Yes |
+| Capability discovery | ✅ Yes |
+| Request validation | ✅ Yes (with jsonschema) |
+| Uses templates | ✅ Yes |
+| Response parsing | ✅ Yes |
+| Session auto-creation | ✅ Yes |
+| Maintainability | ✅ High |
+
+All clients use agent-card.json and a2a-spec.json as the **single source of truth**.
 
 ---
 
